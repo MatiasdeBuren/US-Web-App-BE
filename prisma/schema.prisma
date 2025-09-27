@@ -3,56 +3,60 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-}
-
-model Amenity {
-  id          Int           @id @default(autoincrement())
-  name        String
-  capacity    Int
-  maxDuration Int
-  Reservation Reservation[]
-}
-
-model Apartment {
-  id                               Int     @id @default(autoincrement())
-  unit                             String
-  floor                            Int
-  areaM2                           Float?
-  observations                     String?
-  rooms                            Int
-  ownerId                          Int
-  User_Apartment_ownerIdToUser     User    @relation("Apartment_ownerIdToUser", fields: [ownerId], references: [id])
-  User_User_apartmentIdToApartment User[]  @relation("User_apartmentIdToApartment")
-}
-
-model Reservation {
-  id             Int      @id @default(autoincrement())
-  userId         Int
-  amenityId      Int
-  startTime      DateTime
-  endTime        DateTime
-  status         String   @default("pending")
-  createdAt      DateTime @default(now())
-  hiddenFromUser Boolean  @default(false)
-  Amenity        Amenity  @relation(fields: [amenityId], references: [id])
-  User           User     @relation(fields: [userId], references: [id])
-
-  @@index([amenityId, startTime, endTime])
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id                                    Int           @id @default(autoincrement())
-  name                                  String
-  email                                 String        @unique
-  password                              String
-  apartmentId                           Int?
-  role                                  String?       @default("tenant")
-  createdAt                             DateTime      @default(now())
-  resetPasswordExpires                  DateTime?
-  resetPasswordToken                    String?       @unique
-  Apartment_Apartment_ownerIdToUser     Apartment[]   @relation("Apartment_ownerIdToUser")
-  Reservation                           Reservation[]
-  Apartment_User_apartmentIdToApartment Apartment?    @relation("User_apartmentIdToApartment", fields: [apartmentId], references: [id])
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  role      String?   @default("tenant") // "owner" | "tenant" | "admin"
+
+  apartmentId Int?
+  apartment   Apartment? @relation("TenantApartments", fields: [apartmentId], references: [id])
+  ownedApartments Apartment[] @relation("OwnedApartments")
+
+  reservations Reservation[] @relation("UserReservations")
+  resetPasswordToken    String?       @unique
+  resetPasswordExpires  DateTime?
+  createdAt             DateTime      @default(now())
+}
+
+model Amenity {
+  id           Int           @id @default(autoincrement())
+  name         String
+  capacity     Int
+  maxDuration  Int           // in minutes
+  reservations Reservation[]
+}
+
+model Reservation {
+  id        Int       @id @default(autoincrement())
+  user      User      @relation("UserReservations", fields: [userId], references: [id])
+  userId    Int
+  amenity   Amenity   @relation(fields: [amenityId], references: [id])
+  amenityId Int
+  startTime DateTime
+  endTime   DateTime
+  status    String    @default("pending") // "pending", "confirmed", "cancelled"
+  hiddenFromUser Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([amenityId, startTime, endTime]) 
+}
+
+model Apartment {
+  id           Int      @id @default(autoincrement())
+  unit         String
+  floor        Int
+  areaM2       Float?
+  observations String?
+  rooms       Int
+
+  ownerId Int
+  owner   User     @relation("OwnedApartments", fields: [ownerId], references: [id])
+
+  tenants User[]   @relation("TenantApartments")
 }

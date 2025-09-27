@@ -13,11 +13,11 @@ export const register = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "Es necesario completar todos los campos" });
     }
 
     const userExists = await prisma.user.findUnique({ where: { email } });
-    if (userExists) return res.status(400).json({ message: "User already exists" });
+    if (userExists) return res.status(400).json({ message: "El usuario ya existe" });
 
     const passwordHash = await bcrypt.hash(password, 12);
     await prisma.user.create({
@@ -28,10 +28,10 @@ export const register = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json({ message: "User registered successfully" });
+    res.status(201).json({ message: "Usuario registrado con éxito" });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: "Error interno del servidor" });
     }
 };
 
@@ -39,14 +39,14 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
+    return res.status(400).json({ message: "El email y la contraseña son obligatorios" });
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return res.status(401).json({ message: "Invalid credentials" });
+  if (!user) return res.status(401).json({ message: "Credenciales inválidas" });
 
   const isValid = await bcrypt.compare(password, user.password);
-  if (!isValid) return res.status(401).json({ message: "Invalid credentials" });
+  if (!isValid) return res.status(401).json({ message: "Credenciales inválidas" });
 
   // ✅ Create JWT
   const token = jwt.sign(
@@ -64,7 +64,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const { email } = req.body;
     
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ message: "El email es obligatorio" });
     }
 
     // Check if user exists
@@ -119,7 +119,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 
@@ -129,11 +129,11 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { token, newPassword } = req.body;
     
     if (!token || !newPassword) {
-      return res.status(400).json({ message: "Token and new password are required" });
+      return res.status(400).json({ message: "Se requiere un token y nueva contraseña" });
     }
 
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters long" });
+      return res.status(400).json({ message: "La contraseña debe tener al menos 6 caracteres" });
     }
 
     // Find user with valid reset token
@@ -147,7 +147,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired reset token" });
+      return res.status(400).json({ message: "Token de restablecimiento inválido o expirado" });
     }
 
     // Hash new password
@@ -163,11 +163,11 @@ export const resetPassword = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({ message: "Password reset successfully" });
+    res.json({ message: "Contraseña restablecida con éxito" });
 
   } catch (error) {
     console.error('Reset password error:', error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 

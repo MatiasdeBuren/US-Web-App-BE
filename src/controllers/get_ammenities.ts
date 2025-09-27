@@ -17,6 +17,6 @@ export const getAmenities = async (req: Request, res: Response) => {
     res.json(amenities);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };

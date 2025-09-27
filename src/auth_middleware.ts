@@ -7,12 +7,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
     const parts = authHeader.split(" ");
     if (parts.length !== 2 || parts[0] !== "Bearer") {
-        return res.status(401).json({ message: "Invalid Authorization header format" });
+        return res.status(401).json({ message: "Formato de encabezado de autorización no válido" });
     }
 
     const token = parts[1];
     if (!token) {
-        return res.status(401).json({ message: "Token missing" });
+        return res.status(401).json({ message: "Token faltante" });
     }
 
     try {
@@ -21,7 +21,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
         next();
     } catch (err) {
         console.error("JWT error:", err);
-        return res.status(401).json({ message: "Invalid or expired token" });
+        return res.status(401).json({ message: "Token inválido o expirado" });
     }
 
 }

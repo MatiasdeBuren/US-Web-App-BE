@@ -42,7 +42,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     if (!authHeader) {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req);
       return res.status(401).json({ 
-        message: "Authorization header required for admin access" 
+        message: "Endpoint protegido, se requiere autenticación" 
       });
     }
 
@@ -50,7 +50,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     if (parts.length !== 2 || parts[0] !== "Bearer") {
       logSecurityEvent("INVALID_TOKEN", req);
       return res.status(401).json({ 
-        message: "Invalid Authorization header format" 
+        message: "Formato de encabezado de autorización no válido" 
       });
     }
 
@@ -69,7 +69,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     } catch (err) {
       logSecurityEvent("INVALID_TOKEN", req);
       return res.status(401).json({ 
-        message: "Invalid or expired token" 
+        message: "Token inválido o expirado" 
       });
     }
 
@@ -87,7 +87,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     if (!user) {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req, payload.id, payload.email);
       return res.status(401).json({ 
-        message: "User not found" 
+        message: "Usuario no encontrado" 
       });
     }
 
@@ -95,7 +95,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     if (user.role !== "admin") {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req, user.id, user.email);
       return res.status(403).json({ 
-        message: "Admin access required. Unauthorized attempt logged." 
+        message: "Se requiere acceso de administrador. Intento no autorizado registrado." 
       });
     }
 
@@ -113,7 +113,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
     logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req);
     
     return res.status(500).json({ 
-      message: "Internal server error during admin validation" 
+      message: "Error interno del servidor al verificar admin" 
     });
   }
 };

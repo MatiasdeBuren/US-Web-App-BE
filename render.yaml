@@ -6,8 +6,3 @@ services:
     startCommand: npm start
     env: production
     port: 3000
-    envVars:
-      - key: DATABASE_URL
-      - key: JWT_SECRET  
-      - key: EMAIL_USER
-      - key: EMAIL_PASS

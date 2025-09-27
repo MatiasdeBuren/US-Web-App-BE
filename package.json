@@ -2,11 +2,11 @@
   "name": "us---be",
   "version": "1.0.0",
 
-  "main": "src/index.ts",
+  "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "build": "prisma generate",
-    "start": "node_modules/.bin/prisma migrate deploy && node_modules/.bin/ts-node src/index.ts",
+    "start": "prisma migrate deploy && node index.js",
     "postinstall": "prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",

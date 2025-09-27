@@ -4,9 +4,8 @@ services:
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
+    env: production
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: DATABASE_URL
       - key: JWT_SECRET  
       - key: EMAIL_USER

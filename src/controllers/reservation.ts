@@ -5,11 +5,11 @@ import { prisma } from "../prismaClient.ts";
 export const createReservation = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ message: "User not authenticated" });
+    if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
     const { amenityId, startTime, endTime } = req.body;
     if (!amenityId || !startTime || !endTime) {
-      return res.status(400).json({ message: "Missing parameters" });
+      return res.status(400).json({ message: "Faltan parámetros" });
     }
 
     const start = new Date(startTime);
@@ -21,14 +21,14 @@ export const createReservation = async (req: Request, res: Response) => {
     }
 
     const amenity = await prisma.amenity.findUnique({ where: { id: amenityId } });
-    if (!amenity) return res.status(404).json({ message: "Amenity not found" });
+    if (!amenity) return res.status(404).json({ message: "Amenity no encontrada" });
 
     const duration = (end.getTime() - start.getTime()) / 60000;
     if (duration > amenity.maxDuration) {
-      return res.status(400).json({ message: `Max duration for ${amenity.name} is ${amenity.maxDuration} minutes` });
+      return res.status(400).json({ message: `La duración máxima para ${amenity.name} es de ${amenity.maxDuration} minutos` });
     }
 
-    if (start >= end) return res.status(400).json({ message: "Start time must be before end time" });
+    if (start >= end) return res.status(400).json({ message: "La hora de inicio debe ser anterior a la hora de finalización" });
 
     // Check if user has any overlapping reservations (same time, any amenity)
     const userOverlappingReservation = await prisma.reservation.findFirst({
@@ -43,7 +43,7 @@ export const createReservation = async (req: Request, res: Response) => {
     });
 
     if (userOverlappingReservation) {
-      return res.status(400).json({ message: "You already have a reservation during this time" });
+      return res.status(400).json({ message: "Ya tenes una reserva a esta hora" });
     }
 
     // Check if user already has a reservation for this amenity on the same day
@@ -65,7 +65,7 @@ export const createReservation = async (req: Request, res: Response) => {
     });
 
     if (userSameAmenityReservation) {
-      return res.status(400).json({ message: `You already have a reservation for ${amenity.name} on this day` });
+      return res.status(400).json({ message: `Ya tenes una reserva para ${amenity.name} en este día` });
     }
 
     const overlappingCount = await prisma.reservation.count({
@@ -80,7 +80,7 @@ export const createReservation = async (req: Request, res: Response) => {
     });
 
     if (overlappingCount >= amenity.capacity) {
-      return res.status(400).json({ message: "Time slot full" });
+      return res.status(400).json({ message: "El horario está lleno" });
     }
 
 
@@ -97,7 +97,7 @@ export const createReservation = async (req: Request, res: Response) => {
     res.json(reservation);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 
@@ -146,7 +146,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
     res.json(cancelled);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 
@@ -196,7 +196,7 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
     res.json(reservations);
   } catch (error) {
     console.error('Error in getAmenityReservations:', error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 
@@ -212,8 +212,8 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
       where: { id: Number(id) },
     });
 
-    if (!reservation) return res.status(404).json({ message: "Reservation not found" });
-    if (reservation.userId !== userId) return res.status(403).json({ message: "Not allowed" });
+    if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
+    if (reservation.userId !== userId) return res.status(403).json({ message: "No permitido" });
 
     // Update hiddenFromUser to true
     const updated = await prisma.reservation.update({
@@ -224,6 +224,6 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
     res.json(updated);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };

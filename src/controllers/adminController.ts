@@ -137,14 +137,14 @@ export const updateUserRole = async (req: Request, res: Response) => {
     const validRoles = ["admin", "tenant", "owner"];
     if (!role || !validRoles.includes(role)) {
       return res.status(400).json({ 
-        message: "Invalid role. Must be: admin, tenant, or owner" 
+        message: "Rol inválido. Debe ser: admin, tenant o owner" 
       });
     }
 
     const userId = parseInt(id || "");
     if (isNaN(userId)) {
       return res.status(400).json({ 
-        message: "Invalid user ID" 
+        message: "ID de usuario inválido" 
       });
     }
 
@@ -156,7 +156,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
 
     if (!targetUser) {
       return res.status(404).json({ 
-        message: "User not found" 
+        message: "Usuario no encontrado" 
       });
     }
 
@@ -166,7 +166,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       if (isLastAdmin) {
         console.log(`🚨 [SECURITY] Attempt to remove last admin blocked. User: ${adminUser.email}, Target: ${targetUser.email}`);
         return res.status(403).json({ 
-          message: "Cannot remove admin role from the last administrator in the system" 
+          message: "No se puede eliminar el rol de administrador del último administrador en el sistema" 
         });
       }
     }
@@ -186,7 +186,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
     console.log(`✅ [ADMIN ROLE CHANGE] Successfully changed user ${targetUser.email} role from ${targetUser.role} to ${role}`);
 
     res.json({
-      message: "User role updated successfully",
+      message: "Rol de usuario actualizado con éxito",
       user: updatedUser,
       previousRole: targetUser.role,
       updatedBy: adminUser.email,
@@ -196,7 +196,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN ROLE CHANGE ERROR]", error);
     res.status(500).json({ 
-      message: "Error updating user role" 
+      message: "Error al actualizar el rol de usuario" 
     });
   }
 };
@@ -265,7 +265,7 @@ export const getAllReservations = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN RESERVATIONS ERROR]", error);
     res.status(500).json({ 
-      message: "Error fetching reservations" 
+      message: "Error al obtener las reservas" 
     });
   }
 };
@@ -284,19 +284,19 @@ export const createAmenity = async (req: Request, res: Response) => {
     // Validaciones
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ 
-        message: "Amenity name is required and must be a non-empty string" 
+        message: "El nombre de la amenity es obligatorio y debe ser una cadena no vacía" 
       });
     }
 
     if (!capacity || typeof capacity !== "number" || capacity < 1) {
       return res.status(400).json({ 
-        message: "Capacity is required and must be a positive number" 
+        message: "La capacidad es obligatoria y debe ser un número positivo" 
       });
     }
 
     if (!maxDuration || typeof maxDuration !== "number" || maxDuration < 1) {
       return res.status(400).json({ 
-        message: "Max duration is required and must be a positive number (in minutes)" 
+        message: "La duración máxima es obligatoria y debe ser un número positivo (en minutos)" 
       });
     }
 
@@ -312,7 +312,7 @@ export const createAmenity = async (req: Request, res: Response) => {
 
     if (existingAmenity) {
       return res.status(409).json({ 
-        message: "An amenity with this name already exists" 
+        message: "Ya existe una amenity con este nombre" 
       });
     }
 
@@ -328,7 +328,7 @@ export const createAmenity = async (req: Request, res: Response) => {
     console.log(`✅ [ADMIN CREATE AMENITY] Successfully created amenity: ${newAmenity.name} (ID: ${newAmenity.id})`);
 
     res.status(201).json({
-      message: "Amenity created successfully",
+      message: "Amenity creada con éxito",
       amenity: newAmenity,
       createdBy: adminUser.email,
       createdAt: new Date().toISOString()
@@ -337,7 +337,7 @@ export const createAmenity = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN CREATE AMENITY ERROR]", error);
     res.status(500).json({ 
-      message: "Error creating amenity" 
+      message: "Error al crear la amenity" 
     });
   }
 };
@@ -357,7 +357,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
       return res.status(400).json({ 
-        message: "Invalid amenity ID" 
+        message: "ID de amenity inválido" 
       });
     }
 
@@ -368,7 +368,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
 
     if (!existingAmenity) {
       return res.status(404).json({ 
-        message: "Amenity not found" 
+        message: "Amenity no encontrada" 
       });
     }
 
@@ -378,7 +378,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ 
-          message: "Name must be a non-empty string" 
+          message: "El nombre debe ser una cadena no vacía" 
         });
       }
       updateData.name = name.trim();
@@ -387,7 +387,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     if (capacity !== undefined) {
       if (typeof capacity !== "number" || capacity < 1) {
         return res.status(400).json({ 
-          message: "Capacity must be a positive number" 
+          message: "La capacidad debe ser un número positivo" 
         });
       }
       updateData.capacity = capacity;
@@ -396,7 +396,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     if (maxDuration !== undefined) {
       if (typeof maxDuration !== "number" || maxDuration < 1) {
         return res.status(400).json({ 
-          message: "Max duration must be a positive number (in minutes)" 
+          message: "La duración máxima debe ser un número positivo (en minutos)" 
         });
       }
       updateData.maxDuration = maxDuration;
@@ -418,7 +418,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
 
       if (duplicateAmenity) {
         return res.status(409).json({ 
-          message: "An amenity with this name already exists" 
+          message: "Ya existe una amenity con este nombre" 
         });
       }
     }
@@ -432,7 +432,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     console.log(`✅ [ADMIN UPDATE AMENITY] Successfully updated amenity: ${updatedAmenity.name} (ID: ${updatedAmenity.id})`);
 
     res.json({
-      message: "Amenity updated successfully",
+      message: "Amenity actualizada con éxito",
       amenity: updatedAmenity,
       updatedFields: Object.keys(updateData),
       updatedBy: adminUser.email,
@@ -442,13 +442,13 @@ export const updateAmenity = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN UPDATE AMENITY ERROR]", error);
     res.status(500).json({ 
-      message: "Error updating amenity" 
+      message: "Error al actualizar la amenity" 
     });
   }
 };
 
 // ======================================================================
-// 🏢 GESTIÓN DE APARTAMENTOS - NUEVAS FUNCIONES
+// 🏢 GESTIÓN DE APARTAMENTOS 
 // ======================================================================
 
 /**
@@ -523,7 +523,7 @@ export const getAllApartments = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN APARTMENTS ERROR]", error);
     res.status(500).json({ 
-      message: "Error fetching apartments list" 
+      message: "Error al obtener la lista de apartamentos" 
     });
   }
 };
@@ -542,19 +542,19 @@ export const createApartment = async (req: Request, res: Response) => {
     // Validaciones obligatorias
     if (!unit || typeof unit !== "string" || unit.trim().length === 0) {
       return res.status(400).json({ 
-        message: "Unit is required and must be a non-empty string" 
+        message: "El unit es obligatorio y debe ser una cadena no vacía" 
       });
     }
 
     if (!floor || typeof floor !== "number" || floor < 1) {
       return res.status(400).json({ 
-        message: "Floor is required and must be a positive number (minimum 1)" 
+        message: "El piso es obligatorio y debe ser un número positivo (mínimo 1)" 
       });
     }
 
     if (!rooms || typeof rooms !== "number" || rooms < 1 || rooms > 10) {
       return res.status(400).json({ 
-        message: "Rooms is required and must be between 1 and 10" 
+        message: "Las habitaciones son obligatorias y deben estar entre 1 y 10" 
       });
     }
 
@@ -570,7 +570,7 @@ export const createApartment = async (req: Request, res: Response) => {
 
     if (existingApartment) {
       return res.status(409).json({ 
-        message: "An apartment with this unit number already exists" 
+        message: "Ya existe un apartamento con este número de unidad" 
       });
     }
 
@@ -578,7 +578,7 @@ export const createApartment = async (req: Request, res: Response) => {
     if (ownerId) {
       if (typeof ownerId !== "number") {
         return res.status(400).json({ 
-          message: "Owner ID must be a number" 
+          message: "El ID del owner debe ser un número" 
         });
       }
 
@@ -589,13 +589,13 @@ export const createApartment = async (req: Request, res: Response) => {
 
       if (!owner) {
         return res.status(404).json({ 
-          message: "Owner not found" 
+          message: "Owner no encontrado" 
         });
       }
 
       if (owner.role !== "owner" && owner.role !== "admin") {
         return res.status(400).json({ 
-          message: "Owner must have role 'owner' or 'admin'" 
+          message: "El owner debe tener el rol de 'owner' o 'admin'" 
         });
       }
     }
@@ -637,7 +637,7 @@ export const createApartment = async (req: Request, res: Response) => {
     console.log(`✅ [ADMIN CREATE APARTMENT] Successfully created apartment: ${newApartment.unit} (ID: ${newApartment.id})`);
 
     res.status(201).json({
-      message: "Apartment created successfully",
+      message: "Apartamento creado con éxito",
       apartment: {
         ...newApartment,
         isOccupied: false,
@@ -650,7 +650,7 @@ export const createApartment = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN CREATE APARTMENT ERROR]", error);
     res.status(500).json({ 
-      message: "Error creating apartment" 
+      message: "Error al crear el apartamento" 
     });
   }
 };
@@ -670,7 +670,7 @@ export const updateApartment = async (req: Request, res: Response) => {
     const apartmentId = parseInt(id || "");
     if (isNaN(apartmentId)) {
       return res.status(400).json({ 
-        message: "Invalid apartment ID" 
+        message: "ID de apartamento inválido" 
       });
     }
 
@@ -685,7 +685,7 @@ export const updateApartment = async (req: Request, res: Response) => {
 
     if (!existingApartment) {
       return res.status(404).json({ 
-        message: "Apartment not found" 
+        message: "Apartamento no encontrado" 
       });
     }
 
@@ -697,7 +697,7 @@ export const updateApartment = async (req: Request, res: Response) => {
     if (unit !== undefined) {
       if (typeof unit !== "string" || unit.trim().length === 0) {
         return res.status(400).json({ 
-          message: "Unit must be a non-empty string" 
+          message: "El unit debe ser un string no vacío" 
         });
       }
 
@@ -717,7 +717,7 @@ export const updateApartment = async (req: Request, res: Response) => {
 
         if (duplicateApartment) {
           return res.status(409).json({ 
-            message: "An apartment with this unit number already exists" 
+            message: "Ya existe un apartamento con este número de unidad" 
           });
         }
       }
@@ -787,7 +787,7 @@ export const updateApartment = async (req: Request, res: Response) => {
 
         if (owner.role !== "owner" && owner.role !== "admin") {
           return res.status(400).json({ 
-            message: "Owner must have role 'owner' or 'admin'" 
+            message: "Owner debe tener el rol de 'owner' or 'admin'" 
           });
         }
 
@@ -795,7 +795,7 @@ export const updateApartment = async (req: Request, res: Response) => {
         updatedFields.push("owner");
       } else {
         return res.status(400).json({ 
-          message: "Owner ID must be a number or null" 
+          message: "El ID del owner debe ser un número o null" 
         });
       }
     }
@@ -817,19 +817,19 @@ export const updateApartment = async (req: Request, res: Response) => {
 
         if (!tenant) {
           return res.status(404).json({ 
-            message: "Tenant not found" 
+            message: "Inquilino no encontrado" 
           });
         }
 
         if (tenant.role !== "tenant") {
           return res.status(400).json({ 
-            message: "Tenant must have role 'tenant'" 
+            message: "El inquilino debe tener el rol de 'tenant'" 
           });
         }
 
         if (tenant.apartmentId && tenant.apartmentId !== apartmentId) {
           return res.status(400).json({ 
-            message: "Tenant is already assigned to another apartment" 
+            message: "El inquilino ya está asignado a otro apartamento" 
           });
         }
 
@@ -846,7 +846,7 @@ export const updateApartment = async (req: Request, res: Response) => {
         updatedFields.push("tenant");
       } else {
         return res.status(400).json({ 
-          message: "Tenant ID must be a number or null" 
+          message: "El ID del inquilino debe ser un número o null" 
         });
       }
     }
@@ -1150,7 +1150,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("❌ [ADMIN DELETE AMENITY ERROR]", error);
     res.status(500).json({ 
-      message: "Error deleting amenity" 
+      message: "Error al eliminar el amenity" 
     });
   }
 };
@@ -1170,7 +1170,7 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
       return res.status(400).json({ 
-        message: "Invalid amenity ID" 
+        message: "ID de amenity inválido" 
       });
     }
 
@@ -1277,7 +1277,7 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
   } catch (error) {
     console.error("❌ [ADMIN AMENITY RESERVATIONS ERROR]", error);
     res.status(500).json({ 
-      message: "Error fetching amenity reservations" 
+      message: "Error al obtener las reservas del amenity" 
     });
   }
 };

@@ -39,10 +39,10 @@ export const updateUserPassword = async (req: Request, res: Response) => {
 
     // Buscar al usuario para verificar contraseña actual
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) return res.status(403).json({ message: "Current password is incorrect" });
+    if (!isMatch) return res.status(403).json({ message: "La contraseña actual es incorrecta" });
 
     // Hashear nueva contraseña
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -52,10 +52,10 @@ export const updateUserPassword = async (req: Request, res: Response) => {
       data: { password: hashedPassword },
     });
 
-    res.json({ message: "Password updated successfully" });
+    res.json({ message: "Contraseña actualizada con éxito" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
 
@@ -80,9 +80,9 @@ export const deleteUser = async (req: Request, res: Response) => {
       where: { id: userId }
     });
 
-    res.json({ message: "User account deleted successfully" });
+    res.json({ message: "Cuenta de usuario eliminada con éxito" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };

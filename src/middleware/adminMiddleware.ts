@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { prisma } from "../prismaClient.ts";
+import { prisma } from "../prismaClient";
 
 // Interfaz para el payload del JWT
 interface JWTPayload {

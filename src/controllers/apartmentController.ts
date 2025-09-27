@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { prisma } from '../prismaClient.ts';
+import { prisma } from '../prismaClient';
 
 // Get all apartments
 export const getApartments = async (req: Request, res: Response) => {

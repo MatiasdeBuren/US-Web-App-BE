@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { prisma } from "../prismaClient.ts";
+import { prisma } from "../prismaClient";
 import bcrypt from "bcrypt";
 
 // PATCH /user/name – Actualizar nombre de usuario

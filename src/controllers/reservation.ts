@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { prisma } from "../prismaClient.ts";
+import { prisma } from "../prismaClient";
 
 // Create a reservation
 export const createReservation = async (req: Request, res: Response) => {

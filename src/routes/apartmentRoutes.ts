@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getApartments, getApartmentById } from '../controllers/apartmentController.ts';
+import { getApartments, getApartmentById } from '../controllers/apartmentController';
 
 const router = Router();
 

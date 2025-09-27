@@ -1,20 +1,20 @@
 import express from "express";
 import cors from "cors";
-import authRoutes from "./routes/authRoutes.ts"; // <-- .js
-import { requireAuth } from "./auth_middleware.ts";
-import amenityRoutes from "./routes/get_ammenities.ts";
-import reservationRoutes from "./routes/reservations.ts";
-import userRoutes from "./routes/user.ts";
+import authRoutes from "./routes/authRoutes";
+import { requireAuth } from "./auth_middleware";
+import amenityRoutes from "./routes/get_ammenities";
+import reservationRoutes from "./routes/reservations";
+import userRoutes from "./routes/user";
 
-import apartmentRoutes from "./routes/apartmentRoutes.ts";
+import apartmentRoutes from "./routes/apartmentRoutes";
 
-import adminRoutes from "./routes/adminRoutes.ts";
+import adminRoutes from "./routes/adminRoutes";
 
-import { emailService } from "./services/emailService.ts";
-import { prisma } from "./prismaClient.ts";
+import { emailService } from "./services/emailService";
+import { prisma } from "./prismaClient";
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000');
 
 app.use(cors());
 app.use(express.json());
@@ -83,4 +83,4 @@ app.get("/dashboard", requireAuth, async (req, res) => {
 });
 
 
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));

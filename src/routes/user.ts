@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { requireAuth } from "../auth_middleware.ts";
-import { updateUserName, updateUserPassword, deleteUser } from "../controllers/user.ts";
+import { requireAuth } from "../auth_middleware";
+import { updateUserName, updateUserPassword, deleteUser } from "../controllers/user";
 
 const router = Router();
 

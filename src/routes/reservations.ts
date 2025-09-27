@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { requireAuth } from "../auth_middleware.ts";
-import { createReservation, getUserReservations, cancelReservation, getAmenityReservations, hideReservationFromUser } from "../controllers/reservation.ts";
+import { requireAuth } from "../auth_middleware";
+import { createReservation, getUserReservations, cancelReservation, getAmenityReservations, hideReservationFromUser } from "../controllers/reservation";
 
 
 const router = Router();

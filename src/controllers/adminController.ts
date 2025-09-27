@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { prisma } from "../prismaClient.ts";
-import { wouldBeLastAdmin } from "../middleware/adminMiddleware.ts";
+import { prisma } from "../prismaClient";
+import { wouldBeLastAdmin } from "../middleware/adminMiddleware";
 
 /**
  * GET /admin/stats - Estadísticas generales del sistema

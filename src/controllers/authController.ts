@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import { prisma} from "../prismaClient.ts";
+import { prisma} from "../prismaClient";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { emailService } from "../services/emailService.ts";
+import { emailService } from "../services/emailService";
 
 
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { validateAdmin } from "../middleware/adminMiddleware.ts";
+import { validateAdmin } from "../middleware/adminMiddleware";
 import {
   getSystemStats,
   getAllUsers,
@@ -14,7 +14,7 @@ import {
   getAllAmenities,
   deleteAmenity,
   getAmenityDetailReservations
-} from "../controllers/adminController.ts";
+} from "../controllers/adminController";
 
 const router = Router();
 

@@ -19,6 +19,7 @@ model User {
   ownedApartments Apartment[] @relation("OwnedApartments")
 
   reservations Reservation[] @relation("UserReservations")
+  claims       Claim[]       @relation("UserClaims")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
   createdAt             DateTime      @default(now())
@@ -40,7 +41,7 @@ model Reservation {
   amenityId Int
   startTime DateTime
   endTime   DateTime
-  status    String    @default("pending") // "pending", "confirmed", "cancelled"
+  status    String    @default("pendiente") // "pendiente", "confirmada", "cancelada"
   hiddenFromUser Boolean   @default(false)
   createdAt DateTime  @default(now())
 
@@ -59,4 +60,24 @@ model Apartment {
   owner   User     @relation("OwnedApartments", fields: [ownerId], references: [id])
 
   tenants User[]   @relation("TenantApartments")
+}
+
+model Claim {
+  id          Int      @id @default(autoincrement())
+  subject     String
+  category    String   // "ascensor" | "plomeria" | "electricidad" | "temperatura" | "areas_comunes" | "edificio" | "otro"
+  description String
+  location    String
+  priority    String   // "baja" | "media" | "alta" | "urgente"
+  status      String   @default("pendiente") // "pendiente" | "en_progreso" | "resuelto" | "rechazado"
+  adminNotes  String?
+  
+  userId      Int
+  user        User     @relation("UserClaims", fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

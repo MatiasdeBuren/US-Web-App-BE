@@ -7,6 +7,7 @@ import reservationRoutes from "./routes/reservations";
 import userRoutes from "./routes/user";
 
 import apartmentRoutes from "./routes/apartmentRoutes";
+import claimRoutes from "./routes/claimRoutes";
 
 import adminRoutes from "./routes/adminRoutes";
 
@@ -37,6 +38,7 @@ app.use("/reservations", reservationRoutes);
 app.use("/user", userRoutes);
 
 app.use("/apartments", apartmentRoutes);
+app.use("/claims", claimRoutes);
 
 app.use("/admin", adminRoutes); // 🔒 Rutas de administración
 

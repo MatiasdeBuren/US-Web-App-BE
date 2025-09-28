@@ -15,6 +15,11 @@ import {
   deleteAmenity,
   getAmenityDetailReservations
 } from "../controllers/adminController";
+import {
+  getAdminClaims,
+  updateClaimStatus,
+  deleteAdminClaim
+} from "../controllers/claimController";
 
 const router = Router();
 
@@ -42,5 +47,10 @@ router.get("/apartments", validateAdmin, getAllApartments);
 router.post("/apartments", validateAdmin, createApartment);
 router.put("/apartments/:id", validateAdmin, updateApartment);
 router.delete("/apartments/:id", validateAdmin, deleteApartment);
+
+// 📢 Gestión de reclamos
+router.get("/claims", validateAdmin, getAdminClaims);
+router.put("/claims/:id/status", validateAdmin, updateClaimStatus);
+router.delete("/claims/:id", validateAdmin, deleteAdminClaim);
 
 export default router;

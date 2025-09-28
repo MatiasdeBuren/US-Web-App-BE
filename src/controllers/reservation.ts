@@ -17,7 +17,7 @@ export const createReservation = async (req: Request, res: Response) => {
 
     // Validate that the dates are valid
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return res.status(400).json({ message: "Invalid date format" });
+      return res.status(400).json({ message: "Formato de fecha inválido" });
     }
 
     const amenity = await prisma.amenity.findUnique({ where: { id: amenityId } });
@@ -34,7 +34,7 @@ export const createReservation = async (req: Request, res: Response) => {
     const userOverlappingReservation = await prisma.reservation.findFirst({
       where: {
         userId,
-        status: "confirmed",
+        status: "confirmada",
         AND: [
           { startTime: { lt: end } },
           { endTime: { gt: start } },
@@ -56,7 +56,7 @@ export const createReservation = async (req: Request, res: Response) => {
       where: {
         userId,
         amenityId,
-        status: "confirmed",
+        status: "confirmada",
         startTime: {
           gte: startOfDay,
           lte: endOfDay,
@@ -71,7 +71,7 @@ export const createReservation = async (req: Request, res: Response) => {
     const overlappingCount = await prisma.reservation.count({
       where: {
         amenityId,
-        status: "confirmed",
+        status: "confirmada",
         AND: [
           { startTime: { lt: end } },
           { endTime: { gt: start } },
@@ -90,7 +90,7 @@ export const createReservation = async (req: Request, res: Response) => {
         amenity: { connect: { id: amenityId } },
         startTime: start,
         endTime: end,
-        status: "confirmed",
+        status: "confirmada",
       },
     });
 
@@ -105,7 +105,7 @@ export const createReservation = async (req: Request, res: Response) => {
 export const getUserReservations = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
     const reservations = await prisma.reservation.findMany({
       where: { userId, hiddenFromUser: false },
@@ -116,7 +116,7 @@ export const getUserReservations = async (req: Request, res: Response) => {
     res.json(reservations);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
@@ -127,20 +127,20 @@ export const cancelReservation = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const { id } = req.params; // reservation ID
 
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
     // Check if reservation exists and belongs to user
     const reservation = await prisma.reservation.findUnique({
       where: { id: Number(id) },
     });
 
-    if (!reservation) return res.status(404).json({ message: "Reservation not found" });
-    if (reservation.userId !== userId) return res.status(403).json({ message: "Not allowed" });
+    if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
+    if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
     // Update status to cancelled
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
-      data: { status: "cancelled" },
+      data: { status: "cancelada" },
     });
 
     res.json(cancelled);
@@ -157,7 +157,7 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
 
     const where: any = {
       amenityId: Number(amenityId),
-      status: "confirmed",
+      status: "confirmada",
     };
 
     // CORRECCIÓN: Usar UTC para las fechas de consulta
@@ -205,7 +205,7 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     const { id } = req.params; // reservation ID
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
     // Check if reservation exists and belongs to user
     const reservation = await prisma.reservation.findUnique({
@@ -213,7 +213,7 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
     });
 
     if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
-    if (reservation.userId !== userId) return res.status(403).json({ message: "No permitido" });
+    if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
     // Update hiddenFromUser to true
     const updated = await prisma.reservation.update({

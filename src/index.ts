@@ -8,6 +8,7 @@ import userRoutes from "./routes/user";
 
 import apartmentRoutes from "./routes/apartmentRoutes";
 import claimRoutes from "./routes/claimRoutes";
+import claimAdhesionRoutes from "./routes/claimAdhesionRoutes";
 
 import adminRoutes from "./routes/adminRoutes";
 
@@ -39,6 +40,7 @@ app.use("/user", userRoutes);
 
 app.use("/apartments", apartmentRoutes);
 app.use("/claims", claimRoutes);
+app.use("/claims", claimAdhesionRoutes); // Las rutas de adhesiones son subrutas de claims
 
 app.use("/admin", adminRoutes); // 🔒 Rutas de administración
 

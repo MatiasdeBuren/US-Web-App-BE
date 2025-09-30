@@ -23,6 +23,38 @@ export const createReservation = async (req: Request, res: Response) => {
     const amenity = await prisma.amenity.findUnique({ where: { id: amenityId } });
     if (!amenity) return res.status(404).json({ message: "Amenity no encontrada" });
 
+    // Validar que la amenity esté activa
+    if (!amenity.isActive) {
+      return res.status(400).json({ message: "Esta amenity no está disponible" });
+    }
+
+    // Validar horarios de operación (solo si están definidos)
+    if (amenity.openTime && amenity.closeTime) {
+      const startHour = start.getHours();
+      const startMinutes = start.getMinutes();
+      const endHour = end.getHours();
+      const endMinutes = end.getMinutes();
+
+      const openTime = amenity.openTime.split(':');
+      const closeTime = amenity.closeTime.split(':');
+      const openHour = parseInt(openTime[0]);
+      const openMinutes = parseInt(openTime[1]);
+      const closeHour = parseInt(closeTime[0]);
+      const closeMinutes = parseInt(closeTime[1]);
+
+      // Convertir a minutos para comparación más fácil
+      const startTimeInMinutes = startHour * 60 + startMinutes;
+      const endTimeInMinutes = endHour * 60 + endMinutes;
+      const openTimeInMinutes = openHour * 60 + openMinutes;
+      const closeTimeInMinutes = closeHour * 60 + closeMinutes;
+
+      if (startTimeInMinutes < openTimeInMinutes || endTimeInMinutes > closeTimeInMinutes) {
+        return res.status(400).json({ 
+          message: `${amenity.name} solo está disponible de ${amenity.openTime} a ${amenity.closeTime}` 
+        });
+      }
+    }
+
     const duration = (end.getTime() - start.getTime()) / 60000;
     if (duration > amenity.maxDuration) {
       return res.status(400).json({ message: `La duración máxima para ${amenity.name} es de ${amenity.maxDuration} minutos` });

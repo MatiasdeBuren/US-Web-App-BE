@@ -11,6 +11,9 @@ export const getAmenities = async (req: Request, res: Response) => {
         name: true,
         capacity: true,
         maxDuration: true,
+        openTime: true,
+        closeTime: true,
+        isActive: true,
       },
     });
 

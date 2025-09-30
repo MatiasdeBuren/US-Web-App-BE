@@ -20,6 +20,7 @@ model User {
 
   reservations Reservation[] @relation("UserReservations")
   claims       Claim[]       @relation("UserClaims")
+  claimAdhesions ClaimAdhesion[] @relation("UserClaimAdhesions")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
   createdAt             DateTime      @default(now())
@@ -30,6 +31,9 @@ model Amenity {
   name         String
   capacity     Int
   maxDuration  Int           // in minutes
+  openTime     String?       // "08:00" formato HH:mm - opcional por ahora
+  closeTime    String?       // "19:00" formato HH:mm - opcional por ahora
+  isActive     Boolean       @default(true)
   reservations Reservation[]
 }
 
@@ -74,10 +78,28 @@ model Claim {
   
   userId      Int
   user        User     @relation("UserClaims", fields: [userId], references: [id])
+  adhesions   ClaimAdhesion[] @relation("ClaimAdhesions")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
+}
+
+model ClaimAdhesion {
+  id           Int      @id @default(autoincrement())
+  claimId      Int
+  userId       Int
+  adhesionType String   // "support" | "disagree"
+  
+  claim        Claim    @relation("ClaimAdhesions", fields: [claimId], references: [id], onDelete: Cascade)
+  user         User     @relation("UserClaimAdhesions", fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([claimId, userId], name: "unique_user_claim_adhesion")
+  @@index([claimId])
+  @@index([userId])
 }

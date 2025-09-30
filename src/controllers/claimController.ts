@@ -49,22 +49,88 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
   return where;
 };
 
-// Función helper para mapear claims con createdBy
-const mapClaimsWithCreatedBy = (claims: any[]) => {
+// Función helper para mapear claims con createdBy y adhesiones
+const mapClaimsWithCreatedBy = async (claims: any[], requestingUserId?: number) => {
+  // Obtener adhesiones para todos los claims de una vez
+  const claimIds = claims.map(claim => claim.id);
+  
+  // Obtener conteos de adhesiones para todos los claims
+  const [supportCounts, disagreeCounts, userAdhesions] = await Promise.all([
+    prisma.claimAdhesion.groupBy({
+      by: ['claimId'],
+      where: { 
+        claimId: { in: claimIds },
+        adhesionType: 'support'
+      },
+      _count: { id: true }
+    }),
+    prisma.claimAdhesion.groupBy({
+      by: ['claimId'],
+      where: { 
+        claimId: { in: claimIds },
+        adhesionType: 'disagree'
+      },
+      _count: { id: true }
+    }),
+    requestingUserId ? prisma.claimAdhesion.findMany({
+      where: {
+        claimId: { in: claimIds },
+        userId: requestingUserId
+      },
+      select: { claimId: true, adhesionType: true }
+    }) : []
+  ]);
+
+  // Crear maps para acceso rápido
+  const supportMap = new Map(supportCounts.map(item => [item.claimId, item._count.id]));
+  const disagreeMap = new Map(disagreeCounts.map(item => [item.claimId, item._count.id]));
+  const userAdhesionMap = new Map(userAdhesions.map(item => [item.claimId, item.adhesionType]));
+
   return claims.map((claim: any) => ({
     ...claim,
-    createdBy: claim.user.name
+    createdBy: claim.user.name,
+    adhesion_counts: {
+      support: supportMap.get(claim.id) || 0,
+      disagree: disagreeMap.get(claim.id) || 0
+    },
+    user_adhesion: userAdhesionMap.get(claim.id) || null
   }));
 };
 
-// Función helper para mapear un solo claim con createdBy
-const mapClaimWithCreatedBy = (claim: any) => ({
-  ...claim,
-  createdBy: claim.user.name
-});
+// Función helper para mapear un solo claim con createdBy y adhesiones
+const mapClaimWithCreatedBy = async (claim: any, requestingUserId?: number) => {
+  // Obtener conteos de adhesiones para este claim específico
+  const [supportCount, disagreeCount, userAdhesion] = await Promise.all([
+    prisma.claimAdhesion.count({
+      where: { claimId: claim.id, adhesionType: 'support' }
+    }),
+    prisma.claimAdhesion.count({
+      where: { claimId: claim.id, adhesionType: 'disagree' }
+    }),
+    requestingUserId ? prisma.claimAdhesion.findUnique({
+      where: {
+        unique_user_claim_adhesion: {
+          claimId: claim.id,
+          userId: requestingUserId
+        }
+      },
+      select: { adhesionType: true }
+    }) : null
+  ]);
+
+  return {
+    ...claim,
+    createdBy: claim.user.name,
+    adhesion_counts: {
+      support: supportCount,
+      disagree: disagreeCount
+    },
+    user_adhesion: userAdhesion?.adhesionType || null
+  };
+};
 
 // Función helper para obtener claims con paginación
-const getClaimsWithPagination = async (where: any, skip: number, limitNum: number) => {
+const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUserId?: number) => {
   const [claims, total] = await Promise.all([
     prisma.claim.findMany({
       where,
@@ -80,7 +146,8 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
     prisma.claim.count({ where })
   ]);
 
-  return { claims: mapClaimsWithCreatedBy(claims), total };
+  const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUserId);
+  return { claims: mappedClaims, total };
 };
 
 // Función helper para validar categoría
@@ -149,7 +216,7 @@ export const getUserClaims = async (req: Request, res: Response) => {
     // Si includeAll es true, mostrar todos los reclamos; si no, solo los del usuario
     const userIdFilter = (includeAll === 'true') ? undefined : userId;
     const where = buildClaimFilters(category as string, status as string, search as string, userIdFilter);
-    const { claims, total } = await getClaimsWithPagination(where, skip, limitNum);
+    const { claims, total } = await getClaimsWithPagination(where, skip, limitNum, userId);
 
     res.json({ claims, total, page: pageNum, limit: limitNum });
 
@@ -189,7 +256,8 @@ export const getClaim = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Reclamo no encontrado" });
     }
 
-    res.json(mapClaimWithCreatedBy(claim));
+    const mappedClaim = await mapClaimWithCreatedBy(claim, userId);
+    res.json(mappedClaim);
 
   } catch (error) {
     console.error('Error al obtener reclamo:', error);

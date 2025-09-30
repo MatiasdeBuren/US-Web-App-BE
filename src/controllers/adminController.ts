@@ -276,12 +276,12 @@ export const getAllReservations = async (req: Request, res: Response) => {
  */
 export const createAmenity = async (req: Request, res: Response) => {
   try {
-    const { name, capacity, maxDuration } = req.body;
+    const { name, capacity, maxDuration, openTime, closeTime, isActive } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`➕ [ADMIN CREATE AMENITY] User ${adminUser.email} creating amenity:`, { name, capacity, maxDuration });
+    console.log(`➕ [ADMIN CREATE AMENITY] User ${adminUser.email} creating amenity:`, { name, capacity, maxDuration, openTime, closeTime, isActive });
 
-    // Validaciones
+    // Validaciones obligatorias
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ 
         message: "El nombre de la amenity es obligatorio y debe ser una cadena no vacía" 
@@ -300,6 +300,37 @@ export const createAmenity = async (req: Request, res: Response) => {
       });
     }
 
+    // Validaciones opcionales para horarios
+    if (openTime !== undefined && openTime !== null) {
+      if (typeof openTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(openTime)) {
+        return res.status(400).json({ 
+          message: "El horario de apertura debe estar en formato HH:MM (24 horas)" 
+        });
+      }
+    }
+
+    if (closeTime !== undefined && closeTime !== null) {
+      if (typeof closeTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(closeTime)) {
+        return res.status(400).json({ 
+          message: "El horario de cierre debe estar en formato HH:MM (24 horas)" 
+        });
+      }
+    }
+
+    // Validar que el horario de apertura sea anterior al de cierre
+    if (openTime && closeTime) {
+      const [openHour, openMin] = openTime.split(':').map(Number);
+      const [closeHour, closeMin] = closeTime.split(':').map(Number);
+      const openTimeMinutes = openHour * 60 + openMin;
+      const closeTimeMinutes = closeHour * 60 + closeMin;
+
+      if (openTimeMinutes >= closeTimeMinutes) {
+        return res.status(400).json({ 
+          message: "El horario de apertura debe ser anterior al horario de cierre" 
+        });
+      }
+    }
+
     // Verificar que no exista un amenity con el mismo nombre
     const existingAmenity = await prisma.amenity.findFirst({
       where: {
@@ -316,16 +347,32 @@ export const createAmenity = async (req: Request, res: Response) => {
       });
     }
 
+    // Preparar datos para crear
+    const createData: any = {
+      name: name.trim(),
+      capacity,
+      maxDuration
+    };
+
+    // Agregar campos opcionales solo si se proporcionan
+    if (openTime !== undefined) {
+      createData.openTime = openTime;
+    }
+
+    if (closeTime !== undefined) {
+      createData.closeTime = closeTime;
+    }
+
+    if (isActive !== undefined) {
+      createData.isActive = Boolean(isActive);
+    }
+
     // Crear el amenity
     const newAmenity = await prisma.amenity.create({
-      data: {
-        name: name.trim(),
-        capacity,
-        maxDuration
-      }
+      data: createData
     });
 
-    console.log(`✅ [ADMIN CREATE AMENITY] Successfully created amenity: ${newAmenity.name} (ID: ${newAmenity.id})`);
+    console.log(`✅ [ADMIN CREATE AMENITY] Successfully created amenity: ${newAmenity.name} (ID: ${newAmenity.id}) with hours: ${newAmenity.openTime || 'N/A'} - ${newAmenity.closeTime || 'N/A'}`);
 
     res.status(201).json({
       message: "Amenity creada con éxito",
@@ -349,10 +396,10 @@ export const createAmenity = async (req: Request, res: Response) => {
 export const updateAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, capacity, maxDuration } = req.body;
+    const { name, capacity, maxDuration, openTime, closeTime, isActive } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`✏️ [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration });
+    console.log(`✏️ [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration, openTime, closeTime, isActive });
 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
@@ -402,6 +449,52 @@ export const updateAmenity = async (req: Request, res: Response) => {
       updateData.maxDuration = maxDuration;
     }
 
+    // Validaciones para horarios de operación
+    if (openTime !== undefined) {
+      if (openTime === null) {
+        updateData.openTime = null;
+      } else if (typeof openTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(openTime)) {
+        return res.status(400).json({ 
+          message: "El horario de apertura debe estar en formato HH:MM (24 horas)" 
+        });
+      } else {
+        updateData.openTime = openTime;
+      }
+    }
+
+    if (closeTime !== undefined) {
+      if (closeTime === null) {
+        updateData.closeTime = null;
+      } else if (typeof closeTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(closeTime)) {
+        return res.status(400).json({ 
+          message: "El horario de cierre debe estar en formato HH:MM (24 horas)" 
+        });
+      } else {
+        updateData.closeTime = closeTime;
+      }
+    }
+
+    if (isActive !== undefined) {
+      updateData.isActive = Boolean(isActive);
+    }
+
+    // Validar que el horario de apertura sea anterior al de cierre (solo si ambos se están actualizando o ya existen)
+    const finalOpenTime = updateData.openTime !== undefined ? updateData.openTime : existingAmenity.openTime;
+    const finalCloseTime = updateData.closeTime !== undefined ? updateData.closeTime : existingAmenity.closeTime;
+
+    if (finalOpenTime && finalCloseTime) {
+      const [openHour, openMin] = finalOpenTime.split(':').map(Number);
+      const [closeHour, closeMin] = finalCloseTime.split(':').map(Number);
+      const openTimeMinutes = openHour * 60 + openMin;
+      const closeTimeMinutes = closeHour * 60 + closeMin;
+
+      if (openTimeMinutes >= closeTimeMinutes) {
+        return res.status(400).json({ 
+          message: "El horario de apertura debe ser anterior al horario de cierre" 
+        });
+      }
+    }
+
     // Si se está actualizando el nombre, verificar que no exista otro con el mismo nombre
     if (updateData.name && updateData.name !== existingAmenity.name) {
       const duplicateAmenity = await prisma.amenity.findFirst({
@@ -429,7 +522,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
       data: updateData
     });
 
-    console.log(`✅ [ADMIN UPDATE AMENITY] Successfully updated amenity: ${updatedAmenity.name} (ID: ${updatedAmenity.id})`);
+    console.log(`✅ [ADMIN UPDATE AMENITY] Successfully updated amenity: ${updatedAmenity.name} (ID: ${updatedAmenity.id}) with hours: ${updatedAmenity.openTime || 'N/A'} - ${updatedAmenity.closeTime || 'N/A'}`);
 
     res.json({
       message: "Amenity actualizada con éxito",
@@ -1054,6 +1147,9 @@ export const getAllAmenities = async (req: Request, res: Response) => {
           name: amenity.name,
           capacity: amenity.capacity,
           maxDuration: amenity.maxDuration,
+          openTime: amenity.openTime,
+          closeTime: amenity.closeTime,
+          isActive: amenity.isActive,
           _count: {
             reservations: amenity._count.reservations,
             activeReservations

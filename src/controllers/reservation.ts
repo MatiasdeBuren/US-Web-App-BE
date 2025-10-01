@@ -30,10 +30,16 @@ export const createReservation = async (req: Request, res: Response) => {
 
     // Validar horarios de operación (solo si están definidos)
     if (amenity.openTime && amenity.closeTime) {
-      const startHour = start.getHours();
-      const startMinutes = start.getMinutes();
-      const endHour = end.getHours();
-      const endMinutes = end.getMinutes();
+      // IMPORTANTE: Extraer hora directamente del timestamp ISO para evitar problemas de zona horaria
+      // El frontend envía la hora local como si fuera UTC, así que parseamos directamente
+      const startTimeStr = startTime; // "2025-10-01T21:30:00.000Z"
+      const endTimeStr = endTime;     // "2025-10-01T22:30:00.000Z"
+      
+      // Extraer hora y minutos directamente del string ISO
+      const startHour = parseInt(startTimeStr.substring(11, 13)); // Posición 11-12: "21"
+      const startMinutes = parseInt(startTimeStr.substring(14, 16)); // Posición 14-15: "30"
+      const endHour = parseInt(endTimeStr.substring(11, 13));
+      const endMinutes = parseInt(endTimeStr.substring(14, 16));
 
       const openTime = amenity.openTime.split(':');
       const closeTime = amenity.closeTime.split(':');
@@ -47,6 +53,8 @@ export const createReservation = async (req: Request, res: Response) => {
       const endTimeInMinutes = endHour * 60 + endMinutes;
       const openTimeInMinutes = openHour * 60 + openMinutes;
       const closeTimeInMinutes = closeHour * 60 + closeMinutes;
+
+      console.log(`🕐 [HORARIO DEBUG] Start: ${startHour}:${startMinutes}, End: ${endHour}:${endMinutes}, Amenity: ${amenity.openTime}-${amenity.closeTime}`);
 
       if (startTimeInMinutes < openTimeInMinutes || endTimeInMinutes > closeTimeInMinutes) {
         return res.status(400).json({ 

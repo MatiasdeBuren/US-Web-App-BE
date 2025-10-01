@@ -9,6 +9,9 @@ build/
 # Prisma generated files
 /src/generated/prisma
 
+# Schema hash file (deployment-specific)
+.schema-hash
+
 # Log files
 *.log
 npm-debug.log*

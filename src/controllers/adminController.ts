@@ -1177,7 +1177,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
 /**
  * DELETE /admin/amenities/:id - Eliminar amenity
  * Acceso: Solo administradores
- * Validaciones: Verificar que no tenga reservas activas
+ * Eliminación en cascada: Elimina todas las reservas relacionadas
  */
 export const deleteAmenity = async (req: Request, res: Response) => {
   try {
@@ -1210,38 +1210,59 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar si tiene reservas activas o futuras
+    // Contar todas las reservas relacionadas (activas e históricas)
+    const allReservations = await prisma.reservation.count({
+      where: {
+        amenityId: amenityId
+      }
+    });
+
+    // Contar solo las reservas activas para información
     const activeReservations = await prisma.reservation.count({
       where: {
         amenityId: amenityId,
         status: {
-          in: ["confirmed", "pending"]
+          in: ["confirmada", "pendiente"]
         },
         endTime: {
-          gte: new Date() // Reservas que aún no han terminado o están por empezar
+          gte: new Date()
         }
       }
     });
 
-    if (activeReservations > 0) {
-      console.log(`🚨 [ADMIN DELETE AMENITY] Cannot delete amenity ${id}: has ${activeReservations} active reservations`);
-      return res.status(409).json({ 
-        message: "No se puede eliminar: el amenity tiene reservas activas",
-        details: {
-          activeReservations,
-          amenityName: amenity.name
+    console.log(`� [ADMIN DELETE AMENITY] Amenity ${amenity.name}: ${allReservations} total reservations, ${activeReservations} active`);
+
+    // Proceder con la eliminación en cascada usando una transacción
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Eliminar todas las reservas relacionadas
+      const deletedReservations = await tx.reservation.deleteMany({
+        where: {
+          amenityId: amenityId
         }
       });
-    }
 
-    // Proceder con la eliminación
-    const deletedAmenity = await prisma.amenity.delete({
-      where: { id: amenityId }
+      console.log(`🗑️ [ADMIN DELETE AMENITY] Deleted ${deletedReservations.count} reservations for amenity ${amenity.name}`);
+
+      // 2. Eliminar el amenity
+      const deletedAmenity = await tx.amenity.delete({
+        where: { id: amenityId }
+      });
+
+      return { deletedAmenity, deletedReservationsCount: deletedReservations.count };
     });
 
-    console.log(`✅ [ADMIN DELETE AMENITY] Successfully deleted amenity: ${deletedAmenity.name} (ID: ${deletedAmenity.id})`);
+    console.log(`✅ [ADMIN DELETE AMENITY] Successfully deleted amenity: ${result.deletedAmenity.name} (ID: ${result.deletedAmenity.id}) and ${result.deletedReservationsCount} related reservations`);
 
-    res.status(204).send(); // 204 No Content
+    res.status(200).json({
+      message: "Amenity eliminado exitosamente",
+      deletedAmenity: {
+        id: result.deletedAmenity.id,
+        name: result.deletedAmenity.name
+      },
+      deletedReservations: result.deletedReservationsCount,
+      deletedBy: adminUser.email,
+      deletedAt: new Date().toISOString()
+    });
 
   } catch (error) {
     console.error("❌ [ADMIN DELETE AMENITY ERROR]", error);

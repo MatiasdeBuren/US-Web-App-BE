@@ -1398,3 +1398,143 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
     });
   }
 };
+
+/**
+ * DELETE /admin/users/:id - Eliminar usuario (solo admin)
+ * Acceso: Solo administradores
+ */
+export const deleteUserAdmin = async (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).user;
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: "ID del usuario es requerido" });
+    }
+
+    const userId = parseInt(id);
+    console.log(`🗑️ [ADMIN DELETE USER] Admin ${adminUser.email} attempting to delete user ${id}`);
+
+    // Verificar que el usuario a eliminar existe
+    const userToDelete = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        ownedApartments: {
+          include: {
+            tenants: true
+          }
+        },
+        claims: true,
+        reservations: true,
+        claimAdhesions: true
+      }
+    });
+
+    if (!userToDelete) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Prevenir que un admin se elimine a sí mismo
+    if (userToDelete.id === adminUser.id) {
+      return res.status(403).json({ 
+        message: "No puedes eliminar tu propia cuenta de administrador" 
+      });
+    }
+
+    // Prevenir eliminar el último admin
+    if (userToDelete.role === 'admin') {
+      const isLastAdmin = await wouldBeLastAdmin(userId);
+      if (isLastAdmin) {
+        return res.status(409).json({
+          message: "No se puede eliminar: es el último administrador del sistema",
+          error: "LAST_ADMIN"
+        });
+      }
+    }
+
+    // Si el usuario tiene apartamentos como propietario, transferir o verificar
+    if (userToDelete.ownedApartments && userToDelete.ownedApartments.length > 0) {
+      // Verificar si algún apartamento tiene inquilinos
+      const apartmentsWithTenants = userToDelete.ownedApartments.filter(apt => apt.tenants.length > 0);
+      
+      if (apartmentsWithTenants.length > 0) {
+        return res.status(409).json({
+          message: "No se puede eliminar: el usuario es propietario de departamentos con inquilinos asignados",
+          error: "USER_OWNS_APARTMENTS_WITH_TENANTS",
+          details: {
+            apartmentsCount: userToDelete.ownedApartments.length,
+            apartmentsWithTenants: apartmentsWithTenants.length
+          }
+        });
+      }
+    }
+
+    // Usar transacción para eliminar todo de manera segura
+    const deletionResult = await prisma.$transaction(async (tx) => {
+      // 1. Eliminar adhesiones a claims
+      const deletedAdhesions = await tx.claimAdhesion.deleteMany({
+        where: { userId: userId }
+      });
+
+      // 2. Eliminar claims del usuario (esto también eliminará adhesiones relacionadas)
+      const deletedClaims = await tx.claim.deleteMany({
+        where: { userId: userId }
+      });
+
+      // 3. Eliminar reservaciones del usuario
+      const deletedReservations = await tx.reservation.deleteMany({
+        where: { userId: userId }
+      });
+
+      // 4. Eliminar apartamentos si es propietario y no tienen inquilinos
+      const deletedApartments = await tx.apartment.deleteMany({
+        where: { ownerId: userId }
+      });
+
+      // 5. Finalmente eliminar el usuario
+      const deletedUser = await tx.user.delete({
+        where: { id: userId }
+      });
+
+      return {
+        user: deletedUser,
+        deletedClaims: deletedClaims.count,
+        deletedAdhesions: deletedAdhesions.count,
+        deletedReservations: deletedReservations.count,
+        deletedApartments: deletedApartments.count
+      };
+    });
+
+    console.log(`✅ [ADMIN DELETE USER] User ${userToDelete.email} successfully deleted by admin ${adminUser.email}`);
+    console.log(`📊 [ADMIN DELETE USER] Deletion summary:`, {
+      claims: deletionResult.deletedClaims,
+      adhesions: deletionResult.deletedAdhesions,
+      reservations: deletionResult.deletedReservations,
+      apartments: deletionResult.deletedApartments
+    });
+
+    res.json({
+      message: "Usuario eliminado exitosamente",
+      deletedUser: {
+        id: userToDelete.id,
+        name: userToDelete.name,
+        email: userToDelete.email,
+        role: userToDelete.role
+      },
+      deletionSummary: {
+        claims: deletionResult.deletedClaims,
+        adhesions: deletionResult.deletedAdhesions,
+        reservations: deletionResult.deletedReservations,
+        apartments: deletionResult.deletedApartments
+      },
+      deletedBy: adminUser.email,
+      deletedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ [ADMIN DELETE USER ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al eliminar usuario" 
+    });
+  }
+};

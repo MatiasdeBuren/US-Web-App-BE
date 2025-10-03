@@ -74,7 +74,7 @@ export const createReservation = async (req: Request, res: Response) => {
     const userOverlappingReservation = await prisma.reservation.findFirst({
       where: {
         userId,
-        status: "confirmada",
+        status: { name: "confirmada" },
         AND: [
           { startTime: { lt: end } },
           { endTime: { gt: start } },
@@ -96,7 +96,7 @@ export const createReservation = async (req: Request, res: Response) => {
       where: {
         userId,
         amenityId,
-        status: "confirmada",
+        status: { name: "confirmada" },
         startTime: {
           gte: startOfDay,
           lte: endOfDay,
@@ -111,7 +111,7 @@ export const createReservation = async (req: Request, res: Response) => {
     const overlappingCount = await prisma.reservation.count({
       where: {
         amenityId,
-        status: "confirmada",
+        status: { name: "confirmada" },
         AND: [
           { startTime: { lt: end } },
           { endTime: { gt: start } },
@@ -130,7 +130,7 @@ export const createReservation = async (req: Request, res: Response) => {
         amenity: { connect: { id: amenityId } },
         startTime: start,
         endTime: end,
-        status: "confirmada",
+        status: { connect: { name: "confirmada" } },
       },
     });
 
@@ -180,7 +180,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
     // Update status to cancelled
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
-      data: { status: "cancelada" },
+      data: { status: { connect: { name: "cancelada" } } },
     });
 
     res.json(cancelled);
@@ -197,7 +197,7 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
 
     const where: any = {
       amenityId: Number(amenityId),
-      status: "confirmada",
+      status: { name: "confirmada" },
     };
 
     // CORRECCIÓN: Usar UTC para las fechas de consulta

@@ -13,6 +13,8 @@ import claimAdhesionRoutes from "./routes/claimAdhesionRoutes";
 import adminRoutes from "./routes/adminRoutes";
 
 import { emailService } from "./services/emailService";
+import { ReservationStatusService } from "./services/reservationStatusService";
+import { ClaimLookupService } from "./services/claimLookupService";
 import { prisma } from "./prismaClient";
 
 const app = express();
@@ -87,4 +89,22 @@ app.get("/dashboard", requireAuth, async (req, res) => {
 });
 
 
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
+// Initialize services on startup
+async function initializeServices() {
+  try {
+    console.log('🔄 Initializing lookup tables...');
+    await ClaimLookupService.initializeClaimLookupTables();
+    
+    console.log('🔄 Starting reservation status service...');
+    ReservationStatusService.startAutoUpdate();
+    
+    console.log('✅ All services initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing services:', error);
+  }
+}
+
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  await initializeServices();
+});

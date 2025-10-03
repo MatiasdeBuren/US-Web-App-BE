@@ -9,7 +9,10 @@ import {
   deleteClaim,
   getAdminClaims,
   updateClaimStatus,
-  deleteAdminClaim
+  deleteAdminClaim,
+  getClaimCategories,
+  getClaimPriorities,
+  getClaimStatuses
 } from '../controllers/claimController';
 
 const router = Router();
@@ -20,6 +23,15 @@ const router = Router();
 
 // GET /claims/public - Obtener todos los reclamos públicos
 router.get('/public', getPublicClaims);
+
+// GET /claims/categories - Obtener todas las categorías
+router.get('/categories', getClaimCategories);
+
+// GET /claims/priorities - Obtener todas las prioridades
+router.get('/priorities', getClaimPriorities);
+
+// GET /claims/statuses - Obtener todos los estados
+router.get('/statuses', getClaimStatuses);
 
 // ==========================================
 // RUTAS DE USUARIO (requieren autenticación)

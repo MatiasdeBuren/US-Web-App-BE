@@ -119,10 +119,11 @@ describe('Reservation Controller Tests', () => {
 
       // Verify in database
       const dbReservation = await prisma.reservation.findUnique({
-        where: { id: response.body.id }
+        where: { id: response.body.id },
+        include: { status: true }
       });
       expect(dbReservation).toBeTruthy();
-      expect(dbReservation?.status).toBe('confirmed');
+      expect(dbReservation?.status.name).toBe('confirmada');
     });
 
     it('should reject reservation without authentication', async () => {
@@ -421,13 +422,14 @@ describe('Reservation Controller Tests', () => {
         .expect(200);
 
       expect(response.body.id).toBe(cancellableReservation.id);
-      expect(response.body.status).toBe('cancelled');
+      expect(response.body.status).toBe('cancelada');
 
       // Verify in database
       const dbReservation = await prisma.reservation.findUnique({
-        where: { id: cancellableReservation.id }
+        where: { id: cancellableReservation.id },
+        include: { status: true }
       });
-      expect(dbReservation?.status).toBe('cancelled');
+      expect(dbReservation?.status.name).toBe('cancelada');
     });
 
     it('should reject cancellation without authentication', async () => {

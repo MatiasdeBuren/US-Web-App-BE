@@ -23,7 +23,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
       prisma.reservation.count(),
       prisma.reservation.count({
         where: {
-          status: "confirmed",
+          status: { name: "confirmada" },
           endTime: {
             gte: new Date() // Reservas que aún no han terminado
           }
@@ -1061,7 +1061,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
           apartmentId: apartmentId
         },
         status: {
-          in: ["confirmed", "pending"]
+          name: { in: ["confirmada", "pendiente"] }
         }
       }
     });
@@ -1135,7 +1135,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
         const activeReservations = await prisma.reservation.count({
           where: {
             amenityId: amenity.id,
-            status: "confirmed",
+            status: { name: "confirmada" },
             endTime: {
               gte: new Date() // Reservas que aún no han terminado
             }
@@ -1222,7 +1222,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       where: {
         amenityId: amenityId,
         status: {
-          in: ["confirmada", "pendiente"]
+          name: { in: ["confirmada", "pendiente"] }
         },
         endTime: {
           gte: new Date()
@@ -1353,7 +1353,8 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
               }
             }
           }
-        }
+        },
+        status: true
       },
       orderBy: { startTime: "desc" },
       take: maxLimit
@@ -1367,7 +1368,7 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
       id: reservation.id,
       startTime: reservation.startTime,
       endTime: reservation.endTime,
-      status: reservation.status,
+      status: reservation.status.name,
       createdAt: reservation.createdAt,
       user: {
         id: reservation.user.id,

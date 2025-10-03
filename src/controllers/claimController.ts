@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
+import { ClaimLookupService } from '../services/claimLookupService';
 
 // Tipos para las validaciones
 type ClaimCategory = 'ascensor' | 'plomeria' | 'electricidad' | 'temperatura' | 'areas_comunes' | 'edificio' | 'otro';
@@ -50,7 +51,7 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
 };
 
 // Función helper para mapear claims con createdBy y adhesiones
-const mapClaimsWithCreatedBy = async (claims: any[], requestingUserId?: number) => {
+const mapClaimsWithCreatedBy = async (claims: any[], requestingUser?: any) => {
   // Obtener adhesiones para todos los claims de una vez
   const claimIds = claims.map(claim => claim.id);
   
@@ -72,10 +73,10 @@ const mapClaimsWithCreatedBy = async (claims: any[], requestingUserId?: number) 
       },
       _count: { id: true }
     }),
-    requestingUserId ? prisma.claimAdhesion.findMany({
+    requestingUser ? prisma.claimAdhesion.findMany({
       where: {
         claimId: { in: claimIds },
-        userId: requestingUserId
+        userId: requestingUser.id
       },
       select: { claimId: true, adhesionType: true }
     }) : []
@@ -86,19 +87,31 @@ const mapClaimsWithCreatedBy = async (claims: any[], requestingUserId?: number) 
   const disagreeMap = new Map(disagreeCounts.map(item => [item.claimId, item._count.id]));
   const userAdhesionMap = new Map(userAdhesions.map(item => [item.claimId, item.adhesionType]));
 
-  return claims.map((claim: any) => ({
-    ...claim,
-    createdBy: claim.user.name,
-    adhesion_counts: {
-      support: supportMap.get(claim.id) || 0,
-      disagree: disagreeMap.get(claim.id) || 0
-    },
-    user_adhesion: userAdhesionMap.get(claim.id) || null
-  }));
+  return claims.map((claim: any) => {
+    // Determine createdBy based on anonymity and user role
+    let createdBy = claim.user.name;
+    
+    // Show "Anónimo" if claim is anonymous AND user is not admin AND user is not the creator
+    if (claim.isAnonymous && 
+        requestingUser?.role !== 'admin' && 
+        requestingUser?.id !== claim.userId) {
+      createdBy = 'Anónimo';
+    }
+
+    return {
+      ...claim,
+      createdBy,
+      adhesion_counts: {
+        support: supportMap.get(claim.id) || 0,
+        disagree: disagreeMap.get(claim.id) || 0
+      },
+      user_adhesion: userAdhesionMap.get(claim.id) || null
+    };
+  });
 };
 
 // Función helper para mapear un solo claim con createdBy y adhesiones
-const mapClaimWithCreatedBy = async (claim: any, requestingUserId?: number) => {
+const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
   // Obtener conteos de adhesiones para este claim específico
   const [supportCount, disagreeCount, userAdhesion] = await Promise.all([
     prisma.claimAdhesion.count({
@@ -107,20 +120,30 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUserId?: number) => {
     prisma.claimAdhesion.count({
       where: { claimId: claim.id, adhesionType: 'disagree' }
     }),
-    requestingUserId ? prisma.claimAdhesion.findUnique({
+    requestingUser ? prisma.claimAdhesion.findUnique({
       where: {
         unique_user_claim_adhesion: {
           claimId: claim.id,
-          userId: requestingUserId
+          userId: requestingUser.id
         }
       },
       select: { adhesionType: true }
     }) : null
   ]);
 
+  // Determine createdBy based on anonymity and user role
+  let createdBy = claim.user.name;
+  
+  // Show "Anónimo" if claim is anonymous AND user is not admin AND user is not the creator
+  if (claim.isAnonymous && 
+      requestingUser?.role !== 'admin' && 
+      requestingUser?.id !== claim.userId) {
+    createdBy = 'Anónimo';
+  }
+
   return {
     ...claim,
-    createdBy: claim.user.name,
+    createdBy,
     adhesion_counts: {
       support: supportCount,
       disagree: disagreeCount
@@ -180,6 +203,43 @@ const checkAdminPermissions = (user: any, res: Response) => {
     return false;
   }
   return true;
+};
+
+// ===============================
+// LOOKUP TABLE ENDPOINTS
+// ===============================
+
+// GET /claims/categories - Obtener todas las categorías
+export const getClaimCategories = async (req: Request, res: Response) => {
+  try {
+    const categories = await ClaimLookupService.getAllCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Error al obtener categorías:', error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+// GET /claims/priorities - Obtener todas las prioridades
+export const getClaimPriorities = async (req: Request, res: Response) => {
+  try {
+    const priorities = await ClaimLookupService.getAllPriorities();
+    res.json(priorities);
+  } catch (error) {
+    console.error('Error al obtener prioridades:', error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+// GET /claims/statuses - Obtener todos los estados
+export const getClaimStatuses = async (req: Request, res: Response) => {
+  try {
+    const statuses = await ClaimLookupService.getAllStatuses();
+    res.json(statuses);
+  } catch (error) {
+    console.error('Error al obtener estados:', error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
 };
 
 // ===============================
@@ -273,7 +333,7 @@ export const createClaim = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Usuario no autenticado" });
     }
 
-    const { subject, category, description, location, priority } = req.body;
+    const { subject, category, description, location, priority, isAnonymous } = req.body;
 
     // Validar campos requeridos
     if (!subject || !category || !description || !location || !priority) {
@@ -297,7 +357,8 @@ export const createClaim = async (req: Request, res: Response) => {
         description,
         location,
         priority,
-        userId
+        userId,
+        isAnonymous: Boolean(isAnonymous) // Ensure it's a boolean, default to false
       },
       include: {
         user: {
@@ -328,20 +389,21 @@ export const updateClaim = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID del reclamo es requerido" });
     }
 
-    // Verificar que el reclamo existe y pertenece al usuario
-    const existingClaim = await prisma.claim.findFirst({
+    // Verificar que el reclamo existe, pertenece al usuario y obtener status
+    const claimWithStatus = await prisma.claim.findFirst({
       where: {
         id: parseInt(id),
         userId
-      }
+      },
+      include: { status: true }
     });
 
-    if (!existingClaim) {
+    if (!claimWithStatus) {
       return res.status(404).json({ message: "Reclamo no encontrado" });
     }
 
     // No permitir actualizar reclamos resueltos o rechazados
-    if (existingClaim.status === 'resuelto' || existingClaim.status === 'rechazado') {
+    if (claimWithStatus.status.name === 'resuelto' || claimWithStatus.status.name === 'rechazado') {
       return res.status(403).json({ 
         message: "No se pueden modificar reclamos resueltos o rechazados" 
       });
@@ -404,20 +466,21 @@ export const deleteClaim = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID del reclamo es requerido" });
     }
 
-    // Verificar que el reclamo existe y pertenece al usuario
-    const existingClaim = await prisma.claim.findFirst({
+    // Verificar que el reclamo existe, pertenece al usuario y obtener status
+    const claimWithStatusForDelete = await prisma.claim.findFirst({
       where: {
         id: parseInt(id),
         userId
-      }
+      },
+      include: { status: true }
     });
 
-    if (!existingClaim) {
+    if (!claimWithStatusForDelete) {
       return res.status(404).json({ message: "Reclamo no encontrado" });
     }
 
     // No permitir eliminar reclamos en progreso
-    if (existingClaim.status === 'en_progreso') {
+    if (claimWithStatusForDelete.status.name === 'en_progreso') {
       return res.status(409).json({ 
         message: "No se puede eliminar: el reclamo está siendo procesado" 
       });

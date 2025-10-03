@@ -37,6 +37,16 @@ model Amenity {
   reservations Reservation[]
 }
 
+model ReservationStatus {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "pendiente", "confirmada", "cancelada", "finalizada"
+  label  String // Spanish labels for display
+  
+  reservations Reservation[]
+  
+  @@map("reservation_statuses")
+}
+
 model Reservation {
   id        Int       @id @default(autoincrement())
   user      User      @relation("UserReservations", fields: [userId], references: [id])
@@ -45,11 +55,13 @@ model Reservation {
   amenityId Int
   startTime DateTime
   endTime   DateTime
-  status    String    @default("pendiente") // "pendiente", "confirmada", "cancelada"
+  statusId  Int       @default(1) // Default to "pendiente" (assuming it has id 1)
+  status    ReservationStatus @relation(fields: [statusId], references: [id])
   hiddenFromUser Boolean   @default(false)
   createdAt DateTime  @default(now())
 
-  @@index([amenityId, startTime, endTime]) 
+  @@index([amenityId, startTime, endTime])
+  @@index([statusId])
 }
 
 model Apartment {
@@ -66,15 +78,54 @@ model Apartment {
   tenants User[]   @relation("TenantApartments")
 }
 
+model ClaimCategory {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "ascensor", "plomeria", "electricidad", "temperatura", "areas_comunes", "edificio", "otro"
+  label  String // Spanish labels for display
+  icon   String? // Icon identifier for frontend
+  color  String? // Color for UI display
+  
+  claims Claim[]
+  
+  @@map("claim_categories")
+}
+
+model ClaimPriority {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "baja", "media", "alta", "urgente"
+  label  String // Spanish labels for display
+  level  Int    // Numeric priority level (1=lowest, 4=highest)
+  color  String? // Color for UI display
+  
+  claims Claim[]
+  
+  @@map("claim_priorities")
+}
+
+model ClaimStatus {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "pendiente", "en_progreso", "resuelto", "rechazado"
+  label  String // Spanish labels for display
+  color  String? // Color for UI display
+  
+  claims Claim[]
+  
+  @@map("claim_statuses")
+}
+
 model Claim {
   id          Int      @id @default(autoincrement())
   subject     String
-  category    String   // "ascensor" | "plomeria" | "electricidad" | "temperatura" | "areas_comunes" | "edificio" | "otro"
+  categoryId  Int      @default(7) // Default to "otro" (assuming it has id 7)
+  category    ClaimCategory @relation(fields: [categoryId], references: [id])
   description String
   location    String
-  priority    String   // "baja" | "media" | "alta" | "urgente"
-  status      String   @default("pendiente") // "pendiente" | "en_progreso" | "resuelto" | "rechazado"
+  priorityId  Int      @default(2) // Default to "media" (assuming it has id 2)
+  priority    ClaimPriority @relation(fields: [priorityId], references: [id])
+  statusId    Int      @default(1) // Default to "pendiente" (assuming it has id 1)
+  status      ClaimStatus @relation(fields: [statusId], references: [id])
   adminNotes  String?
+  isAnonymous Boolean  @default(false) // Tracks if claim was created as anonymous
   
   userId      Int
   user        User     @relation("UserClaims", fields: [userId], references: [id])
@@ -84,7 +135,9 @@ model Claim {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
-  @@index([status])
+  @@index([statusId])
+  @@index([categoryId])
+  @@index([priorityId])
 }
 
 model ClaimAdhesion {

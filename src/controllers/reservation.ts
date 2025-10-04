@@ -1,6 +1,31 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 
+// Database-driven validation for reservation status
+const validateReservationStatus = async (status: string) => {
+  const statusRecord = await prisma.reservationStatus.findUnique({
+    where: { name: status }
+  });
+  if (!statusRecord) {
+    const validStatuses = await prisma.reservationStatus.findMany({ select: { name: true } });
+    throw new Error(`Estado inválido. Valores permitidos: ${validStatuses.map(s => s.name).join(', ')}`);
+  }
+  return statusRecord;
+};
+
+// GET /reservations/statuses - Get all reservation statuses
+export const getReservationStatuses = async (req: Request, res: Response) => {
+  try {
+    const statuses = await prisma.reservationStatus.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(statuses);
+  } catch (error) {
+    console.error('Error al obtener estados de reserva:', error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
 // Create a reservation
 export const createReservation = async (req: Request, res: Response) => {
   try {
@@ -132,6 +157,10 @@ export const createReservation = async (req: Request, res: Response) => {
         endTime: end,
         status: { connect: { name: "confirmada" } },
       },
+      include: {
+        amenity: true,
+        status: true
+      }
     });
 
     res.json(reservation);
@@ -149,7 +178,10 @@ export const getUserReservations = async (req: Request, res: Response) => {
 
     const reservations = await prisma.reservation.findMany({
       where: { userId, hiddenFromUser: false },
-      include: { amenity: true },
+      include: { 
+        amenity: true,
+        status: true
+      },
       orderBy: { startTime: "asc" },
     });
 
@@ -181,6 +213,10 @@ export const cancelReservation = async (req: Request, res: Response) => {
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { status: { connect: { name: "cancelada" } } },
+      include: {
+        amenity: true,
+        status: true
+      }
     });
 
     res.json(cancelled);
@@ -228,6 +264,7 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
       orderBy: { startTime: "asc" },
       include: {
         user: { select: { id: true, name: true } },
+        status: true
       },
     });
 

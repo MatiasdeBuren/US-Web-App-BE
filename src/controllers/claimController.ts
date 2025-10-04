@@ -1,19 +1,6 @@
 import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
-import { ClaimLookupService } from '../services/claimLookupService';
 
-// Tipos para las validaciones
-type ClaimCategory = 'ascensor' | 'plomeria' | 'electricidad' | 'temperatura' | 'areas_comunes' | 'edificio' | 'otro';
-type ClaimPriority = 'baja' | 'media' | 'alta' | 'urgente';
-type ClaimStatus = 'pendiente' | 'en_progreso' | 'resuelto' | 'rechazado';
-
-const validCategories: ClaimCategory[] = ['ascensor', 'plomeria', 'electricidad', 'temperatura', 'areas_comunes', 'edificio', 'otro'];
-const validPriorities: ClaimPriority[] = ['baja', 'media', 'alta', 'urgente'];
-const validStatuses: ClaimStatus[] = ['pendiente', 'en_progreso', 'resuelto', 'rechazado'];
-
-// ===============================
-// HELPER FUNCTIONS
-// ===============================
 
 // Función helper para parsear parámetros de paginación
 const parsePaginationParams = (page?: string, limit?: string) => {
@@ -32,11 +19,11 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
   }
 
   if (category && category !== 'all') {
-    where.category = category;
+    where.category = { name: category };
   }
 
   if (status && status !== 'all') {
-    where.status = status;
+    where.status = { name: status };
   }
 
   if (search) {
@@ -163,7 +150,10 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
       include: {
         user: {
           select: { id: true, name: true, email: true }
-        }
+        },
+        category: true,
+        priority: true,
+        status: true
       }
     }),
     prisma.claim.count({ where })
@@ -173,25 +163,38 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
   return { claims: mappedClaims, total };
 };
 
-// Función helper para validar categoría
-const validateCategory = (category: string) => {
-  if (!validCategories.includes(category as ClaimCategory)) {
-    throw new Error(`Categoría inválida. Valores permitidos: ${validCategories.join(', ')}`);
+// Database-driven validation functions
+const validateCategory = async (category: string) => {
+  const categoryRecord = await prisma.claimCategory.findUnique({
+    where: { name: category }
+  });
+  if (!categoryRecord) {
+    const validCategories = await prisma.claimCategory.findMany({ select: { name: true } });
+    throw new Error(`Categoría inválida. Valores permitidos: ${validCategories.map(c => c.name).join(', ')}`);
   }
+  return categoryRecord;
 };
 
-// Función helper para validar prioridad
-const validatePriority = (priority: string) => {
-  if (!validPriorities.includes(priority as ClaimPriority)) {
-    throw new Error(`Prioridad inválida. Valores permitidos: ${validPriorities.join(', ')}`);
+const validatePriority = async (priority: string) => {
+  const priorityRecord = await prisma.claimPriority.findUnique({
+    where: { name: priority }
+  });
+  if (!priorityRecord) {
+    const validPriorities = await prisma.claimPriority.findMany({ select: { name: true } });
+    throw new Error(`Prioridad inválida. Valores permitidos: ${validPriorities.map(p => p.name).join(', ')}`);
   }
+  return priorityRecord;
 };
 
-// Función helper para validar estado
-const validateStatus = (status: string) => {
-  if (!validStatuses.includes(status as ClaimStatus)) {
-    throw new Error(`Estado inválido. Valores permitidos: ${validStatuses.join(', ')}`);
+const validateStatus = async (status: string) => {
+  const statusRecord = await prisma.claimStatus.findUnique({
+    where: { name: status }
+  });
+  if (!statusRecord) {
+    const validStatuses = await prisma.claimStatus.findMany({ select: { name: true } });
+    throw new Error(`Estado inválido. Valores permitidos: ${validStatuses.map(s => s.name).join(', ')}`);
   }
+  return statusRecord;
 };
 
 // Función helper para verificar permisos de admin
@@ -212,7 +215,9 @@ const checkAdminPermissions = (user: any, res: Response) => {
 // GET /claims/categories - Obtener todas las categorías
 export const getClaimCategories = async (req: Request, res: Response) => {
   try {
-    const categories = await ClaimLookupService.getAllCategories();
+    const categories = await prisma.claimCategory.findMany({
+      orderBy: { name: 'asc' }
+    });
     res.json(categories);
   } catch (error) {
     console.error('Error al obtener categorías:', error);
@@ -223,7 +228,9 @@ export const getClaimCategories = async (req: Request, res: Response) => {
 // GET /claims/priorities - Obtener todas las prioridades
 export const getClaimPriorities = async (req: Request, res: Response) => {
   try {
-    const priorities = await ClaimLookupService.getAllPriorities();
+    const priorities = await prisma.claimPriority.findMany({
+      orderBy: { level: 'asc' }
+    });
     res.json(priorities);
   } catch (error) {
     console.error('Error al obtener prioridades:', error);
@@ -234,7 +241,9 @@ export const getClaimPriorities = async (req: Request, res: Response) => {
 // GET /claims/statuses - Obtener todos los estados
 export const getClaimStatuses = async (req: Request, res: Response) => {
   try {
-    const statuses = await ClaimLookupService.getAllStatuses();
+    const statuses = await prisma.claimStatus.findMany({
+      orderBy: { name: 'asc' }
+    });
     res.json(statuses);
   } catch (error) {
     console.error('Error al obtener estados:', error);
@@ -342,32 +351,39 @@ export const createClaim = async (req: Request, res: Response) => {
       });
     }
 
-    // Validar valores permitidos usando helpers
+    // Validate and get records from database
     try {
-      validateCategory(category);
-      validatePriority(priority);
-    } catch (error) {
-      return res.status(400).json({ message: (error as Error).message });
-    }
+      const [categoryRecord, priorityRecord, statusRecord] = await Promise.all([
+        validateCategory(category),
+        validatePriority(priority),
+        validateStatus('pendiente') // Default status for new claims
+      ]);
 
-    const claim = await prisma.claim.create({
-      data: {
-        subject,
-        category,
-        description,
-        location,
-        priority,
-        userId,
-        isAnonymous: Boolean(isAnonymous) // Ensure it's a boolean, default to false
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true }
+      const claim = await prisma.claim.create({
+        data: {
+          subject,
+          categoryId: categoryRecord.id,
+          description,
+          location,
+          priorityId: priorityRecord.id,
+          statusId: statusRecord.id,
+          userId,
+          isAnonymous: Boolean(isAnonymous)
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          category: true,
+          priority: true,
+          status: true
         }
-      }
-    });
+      });
 
-    res.status(201).json(mapClaimWithCreatedBy(claim));
+      res.status(201).json(mapClaimWithCreatedBy(claim));
+    } catch (validationError) {
+      return res.status(400).json({ message: (validationError as Error).message });
+    }
 
   } catch (error) {
     console.error('Error al crear reclamo:', error);
@@ -411,15 +427,6 @@ export const updateClaim = async (req: Request, res: Response) => {
 
     const { subject, category, description, location, priority, status } = req.body;
 
-    // Validar valores si se proporcionan usando helpers
-    try {
-      if (category) validateCategory(category);
-      if (priority) validatePriority(priority);
-      if (status) validateStatus(status);
-    } catch (error) {
-      return res.status(400).json({ message: (error as Error).message });
-    }
-
     // Los usuarios solo pueden cambiar el estado a 'pendiente'
     if (status && status !== 'pendiente') {
       return res.status(403).json({ 
@@ -427,24 +434,40 @@ export const updateClaim = async (req: Request, res: Response) => {
       });
     }
 
-    const updatedClaim = await prisma.claim.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...(subject && { subject }),
-        ...(category && { category }),
-        ...(description && { description }),
-        ...(location && { location }),
-        ...(priority && { priority }),
-        ...(status && { status })
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true }
-        }
-      }
-    });
+    try {
+      // Validate and get IDs from database if values are provided
+      const [categoryRecord, priorityRecord, statusRecord] = await Promise.all([
+        category ? validateCategory(category) : Promise.resolve(null),
+        priority ? validatePriority(priority) : Promise.resolve(null),
+        status ? validateStatus(status) : Promise.resolve(null)
+      ]);
 
-    res.json(mapClaimWithCreatedBy(updatedClaim));
+      // Prepare update data
+      const updateData: any = {};
+      if (subject) updateData.subject = subject;
+      if (description) updateData.description = description;
+      if (location) updateData.location = location;
+      if (categoryRecord) updateData.categoryId = categoryRecord.id;
+      if (priorityRecord) updateData.priorityId = priorityRecord.id;
+      if (statusRecord) updateData.statusId = statusRecord.id;
+
+      const updatedClaim = await prisma.claim.update({
+        where: { id: parseInt(id) },
+        data: updateData,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          category: true,
+          priority: true,
+          status: true
+        }
+      });
+
+      res.json(mapClaimWithCreatedBy(updatedClaim));
+    } catch (validationError) {
+      return res.status(400).json({ message: (validationError as Error).message });
+    }
 
   } catch (error) {
     console.error('Error al actualizar reclamo:', error);
@@ -541,34 +564,38 @@ export const updateClaimStatus = async (req: Request, res: Response) => {
     }
 
     try {
-      validateStatus(status);
-    } catch (error) {
-      return res.status(400).json({ message: (error as Error).message });
-    }
+      // Validate status and get record from database
+      const statusRecord = await validateStatus(status);
 
-    // Verificar que el reclamo existe
-    const existingClaim = await prisma.claim.findUnique({
-      where: { id: parseInt(id) }
-    });
+      // Verificar que el reclamo existe
+      const existingClaim = await prisma.claim.findUnique({
+        where: { id: parseInt(id) }
+      });
 
-    if (!existingClaim) {
-      return res.status(404).json({ message: "Reclamo no encontrado" });
-    }
-
-    const updatedClaim = await prisma.claim.update({
-      where: { id: parseInt(id) },
-      data: {
-        status,
-        ...(adminNotes && { adminNotes })
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true }
-        }
+      if (!existingClaim) {
+        return res.status(404).json({ message: "Reclamo no encontrado" });
       }
-    });
 
-    res.json(mapClaimWithCreatedBy(updatedClaim));
+      const updatedClaim = await prisma.claim.update({
+        where: { id: parseInt(id) },
+        data: {
+          statusId: statusRecord.id,
+          ...(adminNotes && { adminNotes })
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          category: true,
+          priority: true,
+          status: true
+        }
+      });
+
+      res.json(mapClaimWithCreatedBy(updatedClaim));
+    } catch (validationError) {
+      return res.status(400).json({ message: (validationError as Error).message });
+    }
 
   } catch (error) {
     console.error('Error al actualizar estado del reclamo:', error);

@@ -140,7 +140,7 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
 };
 
 // Función helper para obtener claims con paginación
-const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUserId?: number) => {
+const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUser?: any) => {
   const [claims, total] = await Promise.all([
     prisma.claim.findMany({
       where,
@@ -159,7 +159,7 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
     prisma.claim.count({ where })
   ]);
 
-  const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUserId);
+  const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUser);
   return { claims: mappedClaims, total };
 };
 
@@ -274,8 +274,8 @@ export const getPublicClaims = async (req: Request, res: Response) => {
 // GET /claims - Obtener todos los reclamos del usuario
 export const getUserClaims = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
-    if (!userId) {
+    const user = (req as any).user;
+    if (!user?.id) {
       return res.status(401).json({ message: "Usuario no autenticado" });
     }
 
@@ -283,9 +283,9 @@ export const getUserClaims = async (req: Request, res: Response) => {
     const { pageNum, limitNum, skip } = parsePaginationParams(page as string, limit as string);
     
     // Si includeAll es true, mostrar todos los reclamos; si no, solo los del usuario
-    const userIdFilter = (includeAll === 'true') ? undefined : userId;
+    const userIdFilter = (includeAll === 'true') ? undefined : user.id;
     const where = buildClaimFilters(category as string, status as string, search as string, userIdFilter);
-    const { claims, total } = await getClaimsWithPagination(where, skip, limitNum, userId);
+    const { claims, total } = await getClaimsWithPagination(where, skip, limitNum, user);
 
     res.json({ claims, total, page: pageNum, limit: limitNum });
 
@@ -325,7 +325,7 @@ export const getClaim = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Reclamo no encontrado" });
     }
 
-    const mappedClaim = await mapClaimWithCreatedBy(claim, userId);
+    const mappedClaim = await mapClaimWithCreatedBy(claim, (req as any).user);
     res.json(mappedClaim);
 
   } catch (error) {
@@ -380,7 +380,8 @@ export const createClaim = async (req: Request, res: Response) => {
         }
       });
 
-      res.status(201).json(mapClaimWithCreatedBy(claim));
+      const mappedClaim = await mapClaimWithCreatedBy(claim, (req as any).user);
+      res.status(201).json(mappedClaim);
     } catch (validationError) {
       return res.status(400).json({ message: (validationError as Error).message });
     }
@@ -464,7 +465,8 @@ export const updateClaim = async (req: Request, res: Response) => {
         }
       });
 
-      res.json(mapClaimWithCreatedBy(updatedClaim));
+      const mappedUpdatedClaim = await mapClaimWithCreatedBy(updatedClaim, (req as any).user);
+      res.json(mappedUpdatedClaim);
     } catch (validationError) {
       return res.status(400).json({ message: (validationError as Error).message });
     }
@@ -592,7 +594,8 @@ export const updateClaimStatus = async (req: Request, res: Response) => {
         }
       });
 
-      res.json(mapClaimWithCreatedBy(updatedClaim));
+      const mappedUpdatedClaim = await mapClaimWithCreatedBy(updatedClaim, (req as any).user);
+      res.json(mappedUpdatedClaim);
     } catch (validationError) {
       return res.status(400).json({ message: (validationError as Error).message });
     }

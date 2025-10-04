@@ -216,7 +216,7 @@ export const getAllReservations = async (req: Request, res: Response) => {
     const where: any = {};
     
     if (status && typeof status === "string") {
-      where.status = status;
+      where.status = { name: status };
     }
     
     if (amenityId && typeof amenityId === "string") {
@@ -247,7 +247,8 @@ export const getAllReservations = async (req: Request, res: Response) => {
             capacity: true,
             maxDuration: true
           }
-        }
+        },
+        status: true
       },
       orderBy: { createdAt: "desc" },
       take: maxLimit
@@ -1315,22 +1316,29 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
 
     // Filtrar por status si se proporciona
     if (status && typeof status === "string") {
-      const validStatuses = ["active", "confirmed", "pending", "cancelled", "completed"];
+      const validStatuses = ["active", "confirmada", "pendiente", "cancelada", "finalizada"];
       
       if (status === "active") {
         // Reservas activas = confirmadas y que aún no han terminado
-        where.status = "confirmed";
+        where.status = { name: "confirmada" };
         where.endTime = {
           gte: new Date()
         };
-      } else if (status === "completed") {
-        // Reservas completadas = confirmadas y que ya terminaron
-        where.status = "confirmed";
-        where.endTime = {
-          lt: new Date()
-        };
+      } else if (status === "finalizada") {
+        // Reservas finalizadas
+        where.status = { name: "finalizada" };
       } else if (validStatuses.includes(status)) {
-        where.status = status;
+        // Map frontend status names to database status names
+        const statusMap: { [key: string]: string } = {
+          "confirmada": "confirmada",
+          "pendiente": "pendiente", 
+          "cancelada": "cancelada",
+          "finalizada": "finalizada"
+        };
+        const dbStatus = statusMap[status];
+        if (dbStatus) {
+          where.status = { name: dbStatus };
+        }
       }
     }
 

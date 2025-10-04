@@ -30,31 +30,23 @@ export const createReservation = async (req: Request, res: Response) => {
 
     // Validar horarios de operación (solo si están definidos)
     if (amenity.openTime && amenity.closeTime) {
-      // IMPORTANTE: Extraer hora directamente del timestamp ISO para evitar problemas de zona horaria
-      // El frontend envía la hora local como si fuera UTC, así que parseamos directamente
-      const startTimeStr = startTime; // "2025-10-01T21:30:00.000Z"
-      const endTimeStr = endTime;     // "2025-10-01T22:30:00.000Z"
+      // Parse the UTC timestamps and convert to local time for validation
+      const startDate = new Date(startTime);
+      const endDate = new Date(endTime);
       
-      // Extraer hora y minutos directamente del string ISO
-      const startHour = parseInt(startTimeStr.substring(11, 13)); // Posición 11-12: "21"
-      const startMinutes = parseInt(startTimeStr.substring(14, 16)); // Posición 14-15: "30"
-      const endHour = parseInt(endTimeStr.substring(11, 13));
-      const endMinutes = parseInt(endTimeStr.substring(14, 16));
+      const startHour = startDate.getHours();
+      const startMinutes = startDate.getMinutes();
+      const endHour = endDate.getHours();
+      const endMinutes = endDate.getMinutes();
 
-      const openTime = amenity.openTime.split(':');
-      const closeTime = amenity.closeTime.split(':');
-      const openHour = parseInt(openTime[0]);
-      const openMinutes = parseInt(openTime[1]);
-      const closeHour = parseInt(closeTime[0]);
-      const closeMinutes = parseInt(closeTime[1]);
+      const [openTimeHour, openTimeMin] = amenity.openTime.split(':').map(Number);
+      const [closeTimeHour, closeTimeMin] = amenity.closeTime.split(':').map(Number);
 
-      // Convertir a minutos para comparación más fácil
+      // Convert to minutes for easier comparison
       const startTimeInMinutes = startHour * 60 + startMinutes;
       const endTimeInMinutes = endHour * 60 + endMinutes;
-      const openTimeInMinutes = openHour * 60 + openMinutes;
-      const closeTimeInMinutes = closeHour * 60 + closeMinutes;
-
-      console.log(`🕐 [HORARIO DEBUG] Start: ${startHour}:${startMinutes}, End: ${endHour}:${endMinutes}, Amenity: ${amenity.openTime}-${amenity.closeTime}`);
+      const openTimeInMinutes = openTimeHour * 60 + openTimeMin;
+      const closeTimeInMinutes = closeTimeHour * 60 + closeTimeMin;
 
       if (startTimeInMinutes < openTimeInMinutes || endTimeInMinutes > closeTimeInMinutes) {
         return res.status(400).json({ 
@@ -132,6 +124,10 @@ export const createReservation = async (req: Request, res: Response) => {
         endTime: end,
         status: { connect: { name: "confirmada" } },
       },
+      include: {
+        amenity: true,
+        status: true
+      }
     });
 
     res.json(reservation);
@@ -149,7 +145,10 @@ export const getUserReservations = async (req: Request, res: Response) => {
 
     const reservations = await prisma.reservation.findMany({
       where: { userId, hiddenFromUser: false },
-      include: { amenity: true },
+      include: { 
+        amenity: true,
+        status: true
+      },
       orderBy: { startTime: "asc" },
     });
 
@@ -181,6 +180,10 @@ export const cancelReservation = async (req: Request, res: Response) => {
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { status: { connect: { name: "cancelada" } } },
+      include: {
+        amenity: true,
+        status: true
+      }
     });
 
     res.json(cancelled);
@@ -200,12 +203,10 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
       status: { name: "confirmada" },
     };
 
-    // CORRECCIÓN: Usar UTC para las fechas de consulta
     if (startDate || endDate) {
       if (startDate && endDate) {
-        // Para un rango específico de fechas, trabajar en UTC
-        const queryStartDate = new Date(String(startDate) + 'T00:00:00.000Z'); // Forzar UTC
-        const queryEndDate = new Date(String(endDate) + 'T23:59:59.999Z');     // Forzar UTC
+        const queryStartDate = new Date(String(startDate) + 'T00:00:00.000Z');
+        const queryEndDate = new Date(String(endDate) + 'T23:59:59.999Z');
 
 
         where.AND = [
@@ -213,25 +214,22 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
           { endTime: { gte: queryStartDate } },
         ];
       } else if (startDate) {
-        const start = new Date(String(startDate) + 'T00:00:00.000Z'); // Forzar UTC
+        const start = new Date(String(startDate) + 'T00:00:00.000Z');
         where.startTime = { gte: start };
       } else if (endDate) {
-        const end = new Date(String(endDate) + 'T23:59:59.999Z'); // Forzar UTC
+        const end = new Date(String(endDate) + 'T23:59:59.999Z');
         where.endTime = { lte: end };
       }
     }
-
-
 
     const reservations = await prisma.reservation.findMany({
       where,
       orderBy: { startTime: "asc" },
       include: {
         user: { select: { id: true, name: true } },
+        status: true
       },
     });
-
-
 
     res.json(reservations);
   } catch (error) {
@@ -239,7 +237,6 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 };
-
 
 export const hideReservationFromUser = async (req: Request, res: Response) => {
   try {

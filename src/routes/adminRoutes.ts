@@ -21,6 +21,11 @@ import {
   updateClaimStatus,
   deleteAdminClaim
 } from "../controllers/claimController";
+import {
+  getAdminNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
+} from "../controllers/notificationController";
 
 const router = Router();
 
@@ -54,5 +59,10 @@ router.delete("/apartments/:id", validateAdmin, deleteApartment);
 router.get("/claims", validateAdmin, getAdminClaims);
 router.put("/claims/:id/status", validateAdmin, updateClaimStatus);
 router.delete("/claims/:id", validateAdmin, deleteAdminClaim);
+
+// 🔔 Gestión de notificaciones
+router.get("/notifications", validateAdmin, getAdminNotifications);
+router.post("/notifications/:id/mark-read", validateAdmin, markNotificationRead);
+router.post("/notifications/mark-all-read", validateAdmin, markAllNotificationsRead);
 
 export default router;

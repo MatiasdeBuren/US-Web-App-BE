@@ -21,6 +21,7 @@ model User {
   reservations Reservation[] @relation("UserReservations")
   claims       Claim[]       @relation("UserClaims")
   claimAdhesions ClaimAdhesion[] @relation("UserClaimAdhesions")
+  adminNotifications AdminNotification[] @relation("AdminNotifications")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
   createdAt             DateTime      @default(now())
@@ -130,6 +131,7 @@ model Claim {
   userId      Int
   user        User     @relation("UserClaims", fields: [userId], references: [id])
   adhesions   ClaimAdhesion[] @relation("ClaimAdhesions")
+  notifications AdminNotification[] @relation("ClaimNotifications")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -155,4 +157,23 @@ model ClaimAdhesion {
   @@unique([claimId, userId], name: "unique_user_claim_adhesion")
   @@index([claimId])
   @@index([userId])
+}
+
+model AdminNotification {
+  id               Int      @id @default(autoincrement())
+  adminId          Int      // Foreign key to User (admin)
+  claimId          Int      // Foreign key to Claim
+  notificationType String   // "new_claim" | "urgent_claim"
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  readAt           DateTime?
+  
+  admin            User     @relation("AdminNotifications", fields: [adminId], references: [id], onDelete: Cascade)
+  claim            Claim    @relation("ClaimNotifications", fields: [claimId], references: [id], onDelete: Cascade)
+  
+  @@index([adminId])
+  @@index([claimId])
+  @@index([isRead])
+  @@index([adminId, isRead]) // Composite index for filtering unread notifications by admin
+  @@map("admin_notifications")
 }

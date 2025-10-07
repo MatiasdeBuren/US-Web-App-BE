@@ -359,28 +359,57 @@ export const createClaim = async (req: Request, res: Response) => {
         validateStatus('pendiente') // Default status for new claims
       ]);
 
-      const claim = await prisma.claim.create({
-        data: {
-          subject,
-          categoryId: categoryRecord.id,
-          description,
-          location,
-          priorityId: priorityRecord.id,
-          statusId: statusRecord.id,
-          userId,
-          isAnonymous: Boolean(isAnonymous)
-        },
-        include: {
-          user: {
-            select: { id: true, name: true, email: true }
+      // Use transaction to create claim and notifications atomically
+      const result = await prisma.$transaction(async (tx) => {
+        // Create the claim
+        const claim = await tx.claim.create({
+          data: {
+            subject,
+            categoryId: categoryRecord.id,
+            description,
+            location,
+            priorityId: priorityRecord.id,
+            statusId: statusRecord.id,
+            userId,
+            isAnonymous: Boolean(isAnonymous)
           },
-          category: true,
-          priority: true,
-          status: true
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            },
+            category: true,
+            priority: true,
+            status: true
+          }
+        });
+
+        // Get all admin users
+        const adminUsers = await tx.user.findMany({
+          where: { role: 'admin' },
+          select: { id: true }
+        });
+
+        // Determine notification type based on priority
+        // High priority or urgent claims get 'urgent_claim' type
+        const notificationType = (priorityRecord.name === 'alta' || priorityRecord.name === 'urgente') 
+          ? 'urgent_claim' 
+          : 'new_claim';
+
+        // Create notifications for all admins
+        if (adminUsers.length > 0) {
+          await tx.adminNotification.createMany({
+            data: adminUsers.map(admin => ({
+              adminId: admin.id,
+              claimId: claim.id,
+              notificationType
+            }))
+          });
         }
+
+        return claim;
       });
 
-      const mappedClaim = await mapClaimWithCreatedBy(claim, (req as any).user);
+      const mappedClaim = await mapClaimWithCreatedBy(result, (req as any).user);
       res.status(201).json(mappedClaim);
     } catch (validationError) {
       return res.status(400).json({ message: (validationError as Error).message });

@@ -14,6 +14,8 @@ const parsePaginationParams = (page?: string, limit?: string) => {
 const buildClaimFilters = (category?: string, status?: string, search?: string, userId?: number) => {
   const where: any = {};
 
+  console.log('🔍 [BUILD FILTERS] Input params:', { category, status, search, userId });
+
   if (userId) {
     where.userId = userId;
   }
@@ -34,6 +36,7 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
     ];
   }
 
+  console.log('🔍 [BUILD FILTERS] Generated where clause:', JSON.stringify(where, null, 2));
   return where;
 };
 
@@ -141,26 +144,37 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
 
 // Función helper para obtener claims con paginación
 const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUser?: any) => {
-  const [claims, total] = await Promise.all([
-    prisma.claim.findMany({
-      where,
-      skip,
-      take: limitNum,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true }
-        },
-        category: true,
-        priority: true,
-        status: true
-      }
-    }),
-    prisma.claim.count({ where })
-  ]);
+  try {
+    console.log('🔍 [GET CLAIMS PAGINATION] Starting query with params:', { skip, limitNum, where: JSON.stringify(where) });
+    
+    const [claims, total] = await Promise.all([
+      prisma.claim.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          category: true,
+          priority: true,
+          status: true
+        }
+      }),
+      prisma.claim.count({ where })
+    ]);
 
-  const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUser);
-  return { claims: mappedClaims, total };
+    console.log(`🔍 [GET CLAIMS PAGINATION] Raw query returned ${claims.length} claims, total: ${total}`);
+    
+    const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUser);
+    console.log(`🔍 [GET CLAIMS PAGINATION] Mapped claims completed, returning ${mappedClaims.length} claims`);
+    
+    return { claims: mappedClaims, total };
+  } catch (error) {
+    console.error('❌ [GET CLAIMS PAGINATION ERROR]', error);
+    throw error;
+  }
 };
 
 // Database-driven validation functions
@@ -562,17 +576,25 @@ export const getAdminClaims = async (req: Request, res: Response) => {
     const user = (req as any).user;
     if (!checkAdminPermissions(user, res)) return;
 
+    console.log('🔍 [GET ADMIN CLAIMS] Request query params:', req.query);
     const { page, limit, category, status, search, userId } = req.query;
     const { pageNum, limitNum, skip } = parsePaginationParams(page as string, limit as string);
     
     const userIdFilter = userId ? parseInt(userId as string) : undefined;
     const where = buildClaimFilters(category as string, status as string, search as string, userIdFilter);
+    
+    console.log('🔍 [GET ADMIN CLAIMS] Calling getClaimsWithPagination...');
     const { claims, total } = await getClaimsWithPagination(where, skip, limitNum);
 
+    console.log(`✅ [GET ADMIN CLAIMS] Successfully retrieved ${claims.length} claims, total: ${total}`);
     res.json({ claims, total, page: pageNum, limit: limitNum });
 
   } catch (error) {
-    console.error('Error al obtener reclamos (admin):', error);
+    console.error('❌ [GET ADMIN CLAIMS ERROR] Full error details:', error);
+    if (error instanceof Error) {
+      console.error('❌ [GET ADMIN CLAIMS ERROR] Error message:', error.message);
+      console.error('❌ [GET ADMIN CLAIMS ERROR] Error stack:', error.stack);
+    }
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };

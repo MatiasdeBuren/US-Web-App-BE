@@ -28,6 +28,9 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
             },
             priority: {
               select: { name: true, label: true }
+            },
+            category: {
+              select: { name: true, label: true }
             }
           }
         }
@@ -44,22 +47,31 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
     });
 
     // Format notifications according to the required structure
-    const formattedNotifications = notifications.map(notification => ({
-      id: notification.id.toString(),
-      type: notification.notificationType,
-      isRead: notification.isRead,
-      createdAt: notification.createdAt.toISOString(),
-      readAt: notification.readAt?.toISOString() || null,
-      claim: {
-        id: notification.claim.id.toString(),
-        title: notification.claim.subject,
-        priority: notification.claim.priority.name,
-        user: {
-          // Show "Anónimo" if claim is anonymous, otherwise show real name
-          name: notification.claim.isAnonymous ? 'Anónimo' : notification.claim.user.name
+    const formattedNotifications = notifications.map(notification => {
+      const userName = notification.claim.isAnonymous ? 'Anónimo' : notification.claim.user.name;
+      const categoryLabel = notification.claim.category.label || notification.claim.category.name || 'General';
+      const priorityLabel = notification.claim.priority.label || notification.claim.priority.name;
+      
+      return {
+        id: notification.id.toString(),
+        type: notification.notificationType,
+        title: `Nuevo reclamo ${notification.notificationType === 'urgent_claim' ? '(URGENTE)' : ''}`,
+        message: `${userName} creó un reclamo: "${notification.claim.subject}" en la categoría ${categoryLabel}`,
+        isRead: notification.isRead,
+        createdAt: notification.createdAt.toISOString(),
+        readAt: notification.readAt?.toISOString() || null,
+        claimId: notification.claim.id,
+        claim: {
+          id: notification.claim.id.toString(),
+          title: notification.claim.subject,
+          priority: notification.claim.priority.name,
+          category: categoryLabel,
+          user: {
+            name: userName
+          }
         }
-      }
-    }));
+      };
+    });
 
     console.log(`✅ [ADMIN NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for admin ${adminUser.email}, ${unreadCount} unread`);
 

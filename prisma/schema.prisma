@@ -22,6 +22,7 @@ model User {
   claims       Claim[]       @relation("UserClaims")
   claimAdhesions ClaimAdhesion[] @relation("UserClaimAdhesions")
   adminNotifications AdminNotification[] @relation("AdminNotifications")
+  userNotifications UserNotification[] @relation("UserNotifications")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
   createdAt             DateTime      @default(now())
@@ -35,6 +36,7 @@ model Amenity {
   openTime     String?       // "08:00" formato HH:mm - opcional por ahora
   closeTime    String?       // "19:00" formato HH:mm - opcional por ahora
   isActive     Boolean       @default(true)
+  requiresApproval Boolean   @default(false) // If true, reservations need admin approval
   reservations Reservation[]
 }
 
@@ -60,6 +62,8 @@ model Reservation {
   status    ReservationStatus @relation(fields: [statusId], references: [id])
   hiddenFromUser Boolean   @default(false)
   createdAt DateTime  @default(now())
+  notifications UserNotification[] @relation("ReservationNotifications")
+  adminNotifications AdminNotification[] @relation("AdminReservationNotifications")
 
   @@index([amenityId, startTime, endTime])
   @@index([statusId])
@@ -162,18 +166,42 @@ model ClaimAdhesion {
 model AdminNotification {
   id               Int      @id @default(autoincrement())
   adminId          Int      // Foreign key to User (admin)
-  claimId          Int      // Foreign key to Claim
-  notificationType String   // "new_claim" | "urgent_claim"
+  claimId          Int?     // Foreign key to Claim (optional)
+  reservationId    Int?     // Foreign key to Reservation (optional)
+  notificationType String   // "new_claim" | "urgent_claim" | "pending_reservation"
   isRead           Boolean  @default(false)
   createdAt        DateTime @default(now())
   readAt           DateTime?
   
   admin            User     @relation("AdminNotifications", fields: [adminId], references: [id], onDelete: Cascade)
-  claim            Claim    @relation("ClaimNotifications", fields: [claimId], references: [id], onDelete: Cascade)
+  claim            Claim?   @relation("ClaimNotifications", fields: [claimId], references: [id], onDelete: Cascade)
+  reservation      Reservation? @relation("AdminReservationNotifications", fields: [reservationId], references: [id], onDelete: Cascade)
   
   @@index([adminId])
   @@index([claimId])
+  @@index([reservationId])
   @@index([isRead])
   @@index([adminId, isRead]) // Composite index for filtering unread notifications by admin
   @@map("admin_notifications")
+}
+
+model UserNotification {
+  id               Int      @id @default(autoincrement())
+  userId           Int      // Foreign key to User
+  reservationId    Int?     // Foreign key to Reservation (optional, as notification might be about other things)
+  notificationType String   // "reservation_confirmed" | "reservation_cancelled" | "reservation_modified" | "reservation_reminder"
+  title            String   // Notification title
+  message          String   // Notification message
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  readAt           DateTime?
+  
+  user             User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  reservation      Reservation? @relation("ReservationNotifications", fields: [reservationId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([reservationId])
+  @@index([isRead])
+  @@index([userId, isRead]) // Composite index for filtering unread notifications by user
+  @@map("user_notifications")
 }

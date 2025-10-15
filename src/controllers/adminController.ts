@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 import { wouldBeLastAdmin } from "../middleware/adminMiddleware";
+import { emailService } from "../services/emailService";
 
 /**
  * GET /admin/stats - Estadísticas generales del sistema
@@ -277,10 +278,10 @@ export const getAllReservations = async (req: Request, res: Response) => {
  */
 export const createAmenity = async (req: Request, res: Response) => {
   try {
-    const { name, capacity, maxDuration, openTime, closeTime, isActive } = req.body;
+    const { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`➕ [ADMIN CREATE AMENITY] User ${adminUser.email} creating amenity:`, { name, capacity, maxDuration, openTime, closeTime, isActive });
+    console.log(`➕ [ADMIN CREATE AMENITY] User ${adminUser.email} creating amenity:`, { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval });
 
     // Validaciones obligatorias
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -368,12 +369,16 @@ export const createAmenity = async (req: Request, res: Response) => {
       createData.isActive = Boolean(isActive);
     }
 
+    if (requiresApproval !== undefined) {
+      createData.requiresApproval = Boolean(requiresApproval);
+    }
+
     // Crear el amenity
     const newAmenity = await prisma.amenity.create({
       data: createData
     });
 
-    console.log(`✅ [ADMIN CREATE AMENITY] Successfully created amenity: ${newAmenity.name} (ID: ${newAmenity.id}) with hours: ${newAmenity.openTime || 'N/A'} - ${newAmenity.closeTime || 'N/A'}`);
+    console.log(`✅ [ADMIN CREATE AMENITY] Successfully created amenity: ${newAmenity.name} (ID: ${newAmenity.id}) with hours: ${newAmenity.openTime || 'N/A'} - ${newAmenity.closeTime || 'N/A'}, requiresApproval: ${newAmenity.requiresApproval}`);
 
     res.status(201).json({
       message: "Amenity creada con éxito",
@@ -397,10 +402,10 @@ export const createAmenity = async (req: Request, res: Response) => {
 export const updateAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, capacity, maxDuration, openTime, closeTime, isActive } = req.body;
+    const { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`✏️ [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration, openTime, closeTime, isActive });
+    console.log(`✏️ [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval });
 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
@@ -477,6 +482,10 @@ export const updateAmenity = async (req: Request, res: Response) => {
 
     if (isActive !== undefined) {
       updateData.isActive = Boolean(isActive);
+    }
+
+    if (requiresApproval !== undefined) {
+      updateData.requiresApproval = Boolean(requiresApproval);
     }
 
     // Validar que el horario de apertura sea anterior al de cierre (solo si ambos se están actualizando o ya existen)
@@ -1151,6 +1160,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
           openTime: amenity.openTime,
           closeTime: amenity.closeTime,
           isActive: amenity.isActive,
+          requiresApproval: amenity.requiresApproval,
           _count: {
             reservations: amenity._count.reservations,
             activeReservations
@@ -1544,6 +1554,441 @@ export const deleteUserAdmin = async (req: Request, res: Response) => {
     console.error("❌ [ADMIN DELETE USER ERROR]", error);
     res.status(500).json({ 
       message: "Error al eliminar usuario" 
+    });
+  }
+};
+
+// ======================================================================
+// 📋 GESTIÓN DE RESERVAS PENDIENTES - APROBAR/RECHAZAR
+// ======================================================================
+
+/**
+ * PUT /admin/reservations/:id/approve - Aprobar una reserva pendiente
+ * Acceso: Solo administradores
+ */
+export const approveReservation = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const adminUser = (req as any).user;
+
+    console.log(`✅ [ADMIN APPROVE RESERVATION] Admin ${adminUser.email} approving reservation ${id}`);
+
+    const reservationId = parseInt(id || "");
+    if (isNaN(reservationId)) {
+      return res.status(400).json({ 
+        message: "ID de reserva inválido" 
+      });
+    }
+
+    // Verificar que la reserva existe
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        amenity: {
+          select: { id: true, name: true, capacity: true }
+        },
+        status: true
+      }
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ 
+        message: "Reserva no encontrada" 
+      });
+    }
+
+    // Verificar que la reserva esté pendiente
+    if (reservation.status.name !== "pendiente") {
+      return res.status(400).json({ 
+        message: `No se puede aprobar una reserva con estado: ${reservation.status.label}` 
+      });
+    }
+
+    // Verificar que no haya conflictos de capacidad
+    const overlappingCount = await prisma.reservation.count({
+      where: {
+        amenityId: reservation.amenityId,
+        status: { name: "confirmada" },
+        AND: [
+          { startTime: { lt: reservation.endTime } },
+          { endTime: { gt: reservation.startTime } },
+        ],
+      },
+    });
+
+    console.log(`📊 [CAPACITY CHECK] Amenity: ${reservation.amenity.name}, Capacity: ${reservation.amenity.capacity}, Current confirmed: ${overlappingCount}`);
+
+    if (overlappingCount >= reservation.amenity.capacity) {
+      // Auto-rechazar la reserva si no hay capacidad
+      await prisma.$transaction(async (tx) => {
+        // Actualizar status a cancelada
+        await tx.reservation.update({
+          where: { id: reservationId },
+          data: { 
+            status: { connect: { name: "cancelada" } }
+          }
+        });
+
+        // Crear notificación para el usuario
+        await tx.userNotification.create({
+          data: {
+            userId: reservation.user.id,
+            reservationId: reservationId,
+            notificationType: 'reservation_cancelled',
+            title: 'Reserva Rechazada Automáticamente',
+            message: `Tu reserva para ${reservation.amenity.name} fue rechazada porque otras reservas llenaron la capacidad disponible mientras tu solicitud estaba pendiente.`
+          }
+        });
+      });
+
+      // Enviar email de rechazo automático
+      emailService.sendReservationCancellationEmail(
+        reservation.user.email,
+        reservation.user.name,
+        reservation.amenity.name,
+        reservation.startTime,
+        reservation.endTime
+      ).catch(err => console.error('Error sending auto-rejection email:', err));
+
+      console.log(`⚠️ [AUTO-REJECT] Reservation ${id} auto-rejected due to full capacity`);
+
+      return res.status(409).json({ 
+        message: "No se puede aprobar: el horario está lleno. La reserva ha sido rechazada automáticamente y el usuario ha sido notificado.",
+        autoRejected: true
+      });
+    }
+
+    // Aprobar la reserva con transacción
+    const approvedReservation = await prisma.$transaction(async (tx) => {
+      // Actualizar status a confirmada
+      const updated = await tx.reservation.update({
+        where: { id: reservationId },
+        data: { 
+          status: { connect: { name: "confirmada" } }
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          amenity: true,
+          status: true
+        }
+      });
+
+      // Crear notificación para el usuario
+      await tx.userNotification.create({
+        data: {
+          userId: reservation.user.id,
+          reservationId: reservationId,
+          notificationType: 'reservation_confirmed',
+          title: 'Reserva Aprobada',
+          message: `Tu reserva para ${reservation.amenity.name} ha sido aprobada por un administrador.`
+        }
+      });
+
+      return updated;
+    });
+
+    // Enviar email de confirmación
+    emailService.sendReservationConfirmationEmail(
+      reservation.user.email,
+      reservation.user.name,
+      reservation.amenity.name,
+      reservation.startTime,
+      reservation.endTime
+    ).catch(err => console.error('Error sending approval email:', err));
+
+    console.log(`✅ [ADMIN APPROVE RESERVATION] Reservation ${id} approved successfully`);
+
+    res.json({
+      message: "Reserva aprobada exitosamente",
+      reservation: approvedReservation,
+      approvedBy: adminUser.email,
+      approvedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ [ADMIN APPROVE RESERVATION ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al aprobar la reserva" 
+    });
+  }
+};
+
+/**
+ * PUT /admin/reservations/:id/reject - Rechazar una reserva pendiente
+ * Acceso: Solo administradores
+ */
+export const rejectReservation = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminUser = (req as any).user;
+
+    console.log(`❌ [ADMIN REJECT RESERVATION] Admin ${adminUser.email} rejecting reservation ${id}`);
+
+    const reservationId = parseInt(id || "");
+    if (isNaN(reservationId)) {
+      return res.status(400).json({ 
+        message: "ID de reserva inválido" 
+      });
+    }
+
+    // Verificar que la reserva existe
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        amenity: {
+          select: { id: true, name: true, capacity: true }
+        },
+        status: true
+      }
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ 
+        message: "Reserva no encontrada" 
+      });
+    }
+
+    // Verificar que la reserva esté pendiente
+    if (reservation.status.name !== "pendiente") {
+      return res.status(400).json({ 
+        message: `No se puede rechazar una reserva con estado: ${reservation.status.label}` 
+      });
+    }
+
+    // Rechazar la reserva con transacción
+    const rejectedReservation = await prisma.$transaction(async (tx) => {
+      // Actualizar status a cancelada
+      const updated = await tx.reservation.update({
+        where: { id: reservationId },
+        data: { 
+          status: { connect: { name: "cancelada" } }
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          amenity: true,
+          status: true
+        }
+      });
+
+      // Crear notificación para el usuario
+      const notificationMessage = reason 
+        ? `Tu reserva para ${reservation.amenity.name} ha sido rechazada. Motivo: ${reason}`
+        : `Tu reserva para ${reservation.amenity.name} ha sido rechazada por un administrador.`;
+
+      await tx.userNotification.create({
+        data: {
+          userId: reservation.user.id,
+          reservationId: reservationId,
+          notificationType: 'reservation_cancelled',
+          title: 'Reserva Rechazada',
+          message: notificationMessage
+        }
+      });
+
+      return updated;
+    });
+
+    // Enviar email de rechazo
+    emailService.sendReservationCancellationEmail(
+      reservation.user.email,
+      reservation.user.name,
+      reservation.amenity.name,
+      reservation.startTime,
+      reservation.endTime,
+      reason // Pasar la razón al email
+    ).catch(err => console.error('Error sending rejection email:', err));
+
+    console.log(`❌ [ADMIN REJECT RESERVATION] Reservation ${id} rejected successfully`);
+
+    res.json({
+      message: "Reserva rechazada exitosamente",
+      reservation: rejectedReservation,
+      rejectedBy: adminUser.email,
+      rejectedAt: new Date().toISOString(),
+      reason: reason || null
+    });
+
+  } catch (error) {
+    console.error("❌ [ADMIN REJECT RESERVATION ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al rechazar la reserva" 
+    });
+  }
+};
+
+/**
+ * GET /admin/reservations/pending - Obtener todas las reservas pendientes
+ * Acceso: Solo administradores
+ */
+export const getPendingReservations = async (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).user;
+    console.log(`📋 [ADMIN PENDING RESERVATIONS] Admin ${adminUser.email} requesting pending reservations`);
+
+    const pendingReservations = await prisma.reservation.findMany({
+      where: {
+        status: { name: "pendiente" }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            apartment: {
+              select: {
+                unit: true,
+                floor: true
+              }
+            }
+          }
+        },
+        amenity: {
+          select: {
+            id: true,
+            name: true,
+            capacity: true,
+            maxDuration: true
+          }
+        },
+        status: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    console.log(`✅ [ADMIN PENDING RESERVATIONS] Found ${pendingReservations.length} pending reservations`);
+
+    res.json({
+      reservations: pendingReservations,
+      totalCount: pendingReservations.length,
+      retrievedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ [ADMIN PENDING RESERVATIONS ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al obtener reservas pendientes" 
+    });
+  }
+};
+
+/**
+ * DELETE /admin/reservations/:id/cancel - Cancelar cualquier reserva (admin)
+ * Acceso: Solo administradores
+ * Permite al admin cancelar reservas confirmadas, pendientes, o incluso pasadas
+ */
+export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const adminUser = (req as any).user;
+
+    console.log(`🗑️ [ADMIN CANCEL RESERVATION] Admin ${adminUser.email} cancelling reservation ${id}`);
+
+    const reservationId = parseInt(id || "");
+    if (isNaN(reservationId)) {
+      return res.status(400).json({ 
+        message: "ID de reserva inválido" 
+      });
+    }
+
+    // Verificar que la reserva existe
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true }
+        },
+        amenity: {
+          select: { id: true, name: true }
+        },
+        status: true
+      }
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ 
+        message: "Reserva no encontrada" 
+      });
+    }
+
+    // Verificar que la reserva no esté ya cancelada
+    if (reservation.status.name === "cancelada") {
+      return res.status(400).json({ 
+        message: "La reserva ya está cancelada" 
+      });
+    }
+
+    // Cancelar la reserva con transacción
+    const cancelledReservation = await prisma.$transaction(async (tx) => {
+      // Actualizar status a cancelada
+      const updated = await tx.reservation.update({
+        where: { id: reservationId },
+        data: { 
+          status: { connect: { name: "cancelada" } }
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true }
+          },
+          amenity: true,
+          status: true
+        }
+      });
+
+      // Crear notificación para el usuario
+      const notificationMessage = reason 
+        ? `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador. Motivo: ${reason}`
+        : `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador.`;
+
+      await tx.userNotification.create({
+        data: {
+          userId: reservation.user.id,
+          reservationId: reservationId,
+          notificationType: 'reservation_cancelled',
+          title: 'Reserva Cancelada por Administrador',
+          message: notificationMessage
+        }
+      });
+
+      return updated;
+    });
+
+    // Enviar email de cancelación
+    emailService.sendReservationCancellationEmail(
+      reservation.user.email,
+      reservation.user.name,
+      reservation.amenity.name,
+      reservation.startTime,
+      reservation.endTime,
+      reason // Pasar la razón al email
+    ).catch(err => console.error('Error sending admin cancellation email:', err));
+
+    console.log(`✅ [ADMIN CANCEL RESERVATION] Reservation ${id} cancelled successfully by admin`);
+
+    res.json({
+      message: "Reserva cancelada exitosamente",
+      reservation: cancelledReservation,
+      cancelledBy: adminUser.email,
+      cancelledAt: new Date().toISOString(),
+      reason: reason || null
+    });
+
+  } catch (error) {
+    console.error("❌ [ADMIN CANCEL RESERVATION ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al cancelar la reserva" 
     });
   }
 };

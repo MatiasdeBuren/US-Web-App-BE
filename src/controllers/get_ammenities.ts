@@ -14,6 +14,7 @@ export const getAmenities = async (req: Request, res: Response) => {
         openTime: true,
         closeTime: true,
         isActive: true,
+        requiresApproval: true,
       },
     });
 

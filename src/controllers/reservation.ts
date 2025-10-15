@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
+import { emailService } from "../services/emailService";
 
 // Create a reservation
 export const createReservation = async (req: Request, res: Response) => {
@@ -115,20 +116,76 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "El horario está lleno" });
     }
 
+    // Create reservation with transaction to also create notification
+    const reservation = await prisma.$transaction(async (tx) => {
+      // Determine initial status based on requiresApproval
+      const initialStatus = amenity.requiresApproval ? "pendiente" : "confirmada";
+      
+      const newReservation = await tx.reservation.create({
+        data: {
+          user: { connect: { id: userId } },
+          amenity: { connect: { id: amenityId } },
+          startTime: start,
+          endTime: end,
+          status: { connect: { name: initialStatus } },
+        },
+        include: {
+          amenity: true,
+          status: true,
+          user: {
+            select: { id: true, name: true, email: true }
+          }
+        }
+      });
 
-    const reservation = await prisma.reservation.create({
-      data: {
-        user: { connect: { id: userId } },
-        amenity: { connect: { id: amenityId } },
-        startTime: start,
-        endTime: end,
-        status: { connect: { name: "confirmada" } },
-      },
-      include: {
-        amenity: true,
-        status: true
+      if (amenity.requiresApproval) {
+        // Create in-app notification for user about pending status
+        await tx.userNotification.create({
+          data: {
+            userId,
+            reservationId: newReservation.id,
+            notificationType: 'reservation_confirmed',
+            title: 'Reserva Pendiente de Aprobación',
+            message: `Tu solicitud de reserva para ${amenity.name} está pendiente de aprobación por un administrador.`
+          }
+        });
+
+        // Create notifications for all admins
+        const admins = await tx.user.findMany({
+          where: { role: 'admin' },
+          select: { id: true }
+        });
+
+        // Create admin notifications for pending reservations
+        await Promise.all(
+          admins.map(admin =>
+            tx.adminNotification.create({
+              data: {
+                adminId: admin.id,
+                reservationId: newReservation.id,
+                notificationType: 'pending_reservation',
+                isRead: false
+              }
+            })
+          )
+        );
       }
+      // Note: No notification created for auto-confirmed reservations
+      // User gets immediate feedback via success toast in frontend
+
+      return newReservation;
     });
+
+    // Send confirmation email only if reservation is auto-confirmed (async, don't wait)
+    if (!amenity.requiresApproval) {
+      emailService.sendReservationConfirmationEmail(
+        reservation.user.email,
+        reservation.user.name,
+        reservation.amenity.name,
+        start,
+        end
+      ).catch(err => console.error('Error sending confirmation email:', err));
+    }
 
     res.json(reservation);
   } catch (error) {
@@ -171,20 +228,38 @@ export const cancelReservation = async (req: Request, res: Response) => {
     // Check if reservation exists and belongs to user
     const reservation = await prisma.reservation.findUnique({
       where: { id: Number(id) },
+      include: {
+        amenity: true,
+        user: {
+          select: { id: true, name: true, email: true }
+        }
+      }
     });
 
     if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
     if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
-    // Update status to cancelled
+    // Update status to cancelled WITHOUT creating notification (user gets toast in frontend)
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { status: { connect: { name: "cancelada" } } },
       include: {
         amenity: true,
-        status: true
+        status: true,
+        user: {
+          select: { id: true, name: true, email: true }
+        }
       }
     });
+
+    // Send cancellation email (async, don't wait)
+    emailService.sendReservationCancellationEmail(
+      reservation.user.email,
+      reservation.user.name,
+      reservation.amenity.name,
+      reservation.startTime,
+      reservation.endTime
+    ).catch(err => console.error('Error sending cancellation email:', err));
 
     res.json(cancelled);
   } catch (error) {

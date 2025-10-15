@@ -14,7 +14,11 @@ import {
   deleteApartment,
   getAllAmenities,
   deleteAmenity,
-  getAmenityDetailReservations
+  getAmenityDetailReservations,
+  approveReservation,
+  rejectReservation,
+  getPendingReservations,
+  cancelReservationAsAdmin
 } from "../controllers/adminController";
 import {
   getAdminClaims,
@@ -41,6 +45,10 @@ router.delete("/users/:id", validateAdmin, deleteUserAdmin);
 
 // 📋 Gestión de reservas
 router.get("/reservations", validateAdmin, getAllReservations);
+router.get("/reservations/pending", validateAdmin, getPendingReservations);
+router.put("/reservations/:id/approve", validateAdmin, approveReservation);
+router.put("/reservations/:id/reject", validateAdmin, rejectReservation);
+router.delete("/reservations/:id/cancel", validateAdmin, cancelReservationAsAdmin);
 
 // � Gestión de amenities - RUTAS COMPLETAS
 router.get("/amenities", validateAdmin, getAllAmenities);

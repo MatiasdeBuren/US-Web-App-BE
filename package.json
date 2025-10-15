@@ -1,7 +1,6 @@
 {
   "name": "us---be",
   "version": "1.0.0",
-
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
@@ -22,8 +21,9 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.15.0",
-    "@types/nodemailer": "^7.0.1",
+    "@sendgrid/mail": "^8.1.6",
     "@types/node": "^24.3.1",
+    "@types/nodemailer": "^7.0.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",

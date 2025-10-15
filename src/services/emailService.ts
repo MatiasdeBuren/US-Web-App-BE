@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
 interface EmailConfig {
   host: string;
@@ -21,6 +22,7 @@ class EmailService {
   private transporter!: nodemailer.Transporter;
   private fromEmail: string;
   private isMockMode: boolean = false;
+  private useSendGridAPI: boolean = false;
 
   constructor() {
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@yourapp.com';
@@ -61,15 +63,10 @@ class EmailService {
           this.createMockTransporter();
           return;
         }
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          secure: false,
-          auth: {
-            user: 'apikey',
-            pass: process.env.SENDGRID_API_KEY!,
-          },
-        });
+        // Use SendGrid API instead of SMTP (avoids port blocking on Render)
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+        this.useSendGridAPI = true;
+        console.log('✅ SendGrid API configured');
         break;
 
       case 'smtp':
@@ -108,6 +105,22 @@ class EmailService {
 
   async sendEmail(options: SendEmailOptions): Promise<void> {
     try {
+      // Use SendGrid API if configured
+      if (this.useSendGridAPI) {
+        const msg = {
+          to: options.to,
+          from: this.fromEmail,
+          subject: options.subject,
+          text: options.text || '',
+          html: options.html,
+        };
+        
+        await sgMail.send(msg);
+        console.log('✅ Email sent successfully via SendGrid API');
+        return;
+      }
+
+      // Otherwise use nodemailer (SMTP or mock)
       const mailOptions = {
         from: `"US" <${this.fromEmail}>`,
         to: options.to,
@@ -941,12 +954,18 @@ Este es un correo automático, por favor no respondas a esta dirección.
         console.log('📧 Email service running in mock mode (development)');
         return true;
       }
+
+      if (this.useSendGridAPI) {
+        console.log('✅ SendGrid API ready (no connection test needed)');
+        return true;
+      }
       
       await this.transporter.verify();
       console.log('✅ Email service connection verified');
       return true;
     } catch (error) {
       console.error('❌ Email service connection failed:', error);
+      console.warn('⚠️ Email service connection failed - check your configuration');
       return false;
     }
   }

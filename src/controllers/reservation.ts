@@ -31,14 +31,34 @@ export const createReservation = async (req: Request, res: Response) => {
 
     // Validar horarios de operación (solo si están definidos)
     if (amenity.openTime && amenity.closeTime) {
-      // Parse the UTC timestamps and convert to local time for validation
+      // Parse the UTC timestamps and convert to Argentina time for validation
       const startDate = new Date(startTime);
       const endDate = new Date(endTime);
       
-      const startHour = startDate.getHours();
-      const startMinutes = startDate.getMinutes();
-      const endHour = endDate.getHours();
-      const endMinutes = endDate.getMinutes();
+      // Convert UTC to Argentina time (UTC-3)
+      // Use toLocaleString to get local time components in Argentina timezone
+      const argTimezone = 'America/Argentina/Buenos_Aires';
+      
+      const startLocalStr = startDate.toLocaleString('en-US', { 
+        timeZone: argTimezone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const endLocalStr = endDate.toLocaleString('en-US', { 
+        timeZone: argTimezone,
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      const [startHourStr, startMinutesStr] = startLocalStr.split(':');
+      const [endHourStr, endMinutesStr] = endLocalStr.split(':');
+      
+      const startHour = parseInt(startHourStr);
+      const startMinutes = parseInt(startMinutesStr);
+      const endHour = parseInt(endHourStr);
+      const endMinutes = parseInt(endMinutesStr);
 
       const [openTimeHour, openTimeMin] = amenity.openTime.split(':').map(Number);
       const [closeTimeHour, closeTimeMin] = amenity.closeTime.split(':').map(Number);
@@ -48,6 +68,12 @@ export const createReservation = async (req: Request, res: Response) => {
       const endTimeInMinutes = endHour * 60 + endMinutes;
       const openTimeInMinutes = openTimeHour * 60 + openTimeMin;
       const closeTimeInMinutes = closeTimeHour * 60 + closeTimeMin;
+
+      console.log(`🕐 [OPERATING HOURS CHECK] ${amenity.name}`);
+      console.log(`   UTC times: ${startDate.toISOString()} → ${endDate.toISOString()}`);
+      console.log(`   Argentina times: ${startLocalStr} → ${endLocalStr}`);
+      console.log(`   Operating hours: ${amenity.openTime} - ${amenity.closeTime}`);
+      console.log(`   Validation: ${startTimeInMinutes} >= ${openTimeInMinutes} && ${endTimeInMinutes} <= ${closeTimeInMinutes}`);
 
       if (startTimeInMinutes < openTimeInMinutes || endTimeInMinutes > closeTimeInMinutes) {
         return res.status(400).json({ 

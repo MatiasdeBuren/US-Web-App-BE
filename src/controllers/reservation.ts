@@ -170,7 +170,7 @@ export const createReservation = async (req: Request, res: Response) => {
           data: {
             userId,
             reservationId: newReservation.id,
-            notificationType: 'reservation_confirmed',
+            notificationType: 'pending_reservation',
             title: 'Reserva Pendiente de Aprobación',
             message: `Tu solicitud de reserva para ${amenity.name} está pendiente de aprobación por un administrador.`
           }

@@ -3,15 +3,10 @@ import { prisma } from "../prismaClient";
 import { wouldBeLastAdmin } from "../middleware/adminMiddleware";
 import { emailService } from "../services/emailService";
 
-/**
- * GET /admin/stats - Estadísticas generales del sistema
- * Acceso: Solo administradores
- */
 export const getSystemStats = async (req: Request, res: Response) => {
   try {
     console.log(`📊 [ADMIN STATS] User ${(req as any).user.email} requesting system stats`);
 
-    // Consultas paralelas para mejor rendimiento
     const [
       totalUsers,
       totalApartments,
@@ -26,7 +21,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
         where: {
           status: { name: "confirmada" },
           endTime: {
-            gte: new Date() // Reservas que aún no han terminado
+            gte: new Date() // Reservas que no terminaron
           }
         }
       }),
@@ -53,10 +48,6 @@ export const getSystemStats = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/users - Listar todos los usuarios con información completa
- * Acceso: Solo administradores
- */
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     console.log(`👥 [ADMIN USERS] User ${(req as any).user.email} requesting all users`);
@@ -121,11 +112,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/users/:id/role - Cambiar role de un usuario
- * Acceso: Solo administradores
- * Protección: No permite eliminar el último admin
- */
 export const updateUserRole = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -161,7 +147,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       });
     }
 
-    // PROTECCIÓN CRÍTICA: No permitir eliminar el último admin
+    // No se puede eliminar el último admin 
     if (targetUser.role === "admin" && role !== "admin") {
       const isLastAdmin = await wouldBeLastAdmin(userId);
       if (isLastAdmin) {
@@ -172,7 +158,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       }
     }
 
-    // Actualizar el role
+    // Actualizar el rol
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { role },
@@ -202,10 +188,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/reservations - Obtener todas las reservas del sistema
- * Acceso: Solo administradores
- */
+
 export const getAllReservations = async (req: Request, res: Response) => {
   try {
     const { status, amenityId, limit = "50" } = req.query;
@@ -302,7 +285,7 @@ export const createAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Validaciones opcionales para horarios
+    // Validaciones de horarios
     if (openTime !== undefined && openTime !== null) {
       if (typeof openTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(openTime)) {
         return res.status(400).json({ 
@@ -395,10 +378,6 @@ export const createAmenity = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/amenities/:id - Actualizar amenity existente
- * Acceso: Solo administradores
- */
 export const updateAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -550,14 +529,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
   }
 };
 
-// ======================================================================
-// 🏢 GESTIÓN DE APARTAMENTOS 
-// ======================================================================
-
-/**
- * GET /admin/apartments - Obtener todos los apartamentos con información completa
- * Acceso: Solo administradores
- */
 export const getAllApartments = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -631,10 +602,7 @@ export const getAllApartments = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /admin/apartments - Crear nuevo apartamento
- * Acceso: Solo administradores
- */
+
 export const createApartment = async (req: Request, res: Response) => {
   try {
     const { unit, floor, rooms, areaM2, observations, ownerId } = req.body;
@@ -758,10 +726,7 @@ export const createApartment = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/apartments/:id - Actualizar apartamento existente
- * Acceso: Solo administradores
- */
+
 export const updateApartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1006,11 +971,6 @@ export const updateApartment = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/apartments/:id - Eliminar apartamento
- * Acceso: Solo administradores
- * Validaciones: Verificar dependencias antes de eliminar
- */
 export const deleteApartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1113,14 +1073,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
   }
 };
 
-// ======================================================================
-// 🏊 GESTIÓN DE AMENITIES COMPLETA - FUNCIONES NUEVAS Y ACTUALIZADAS
-// ======================================================================
 
-/**
- * GET /admin/amenities - Obtener todos los amenities con conteos de reservas
- * Acceso: Solo administradores
- */
 export const getAllAmenities = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -1185,11 +1138,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/amenities/:id - Eliminar amenity
- * Acceso: Solo administradores
- * Eliminación en cascada: Elimina todas las reservas relacionadas
- */
+
 export const deleteAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1283,10 +1232,6 @@ export const deleteAmenity = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/amenities/:id/reservations - Obtener todas las reservas de un amenity específico
- * Acceso: Solo administradores
- */
 export const getAmenityDetailReservations = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1418,10 +1363,6 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
   }
 };
 
-/**
- * DELETE /admin/users/:id - Eliminar usuario (solo admin)
- * Acceso: Solo administradores
- */
 export const deleteUserAdmin = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -1558,14 +1499,6 @@ export const deleteUserAdmin = async (req: Request, res: Response) => {
   }
 };
 
-// ======================================================================
-// 📋 GESTIÓN DE RESERVAS PENDIENTES - APROBAR/RECHAZAR
-// ======================================================================
-
-/**
- * PUT /admin/reservations/:id/approve - Aprobar una reserva pendiente
- * Acceso: Solo administradores
- */
 export const approveReservation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1633,11 +1566,15 @@ export const approveReservation = async (req: Request, res: Response) => {
         });
 
         // Crear notificación para el usuario
+        const cancelledType = await tx.userNotificationType.findUnique({
+          where: { name: 'reservation_cancelled' }
+        });
+        
         await tx.userNotification.create({
           data: {
             userId: reservation.user.id,
             reservationId: reservationId,
-            notificationType: 'reservation_cancelled',
+            typeId: cancelledType!.id,
             title: 'Reserva Rechazada Automáticamente',
             message: `Tu reserva para ${reservation.amenity.name} fue rechazada porque otras reservas llenaron la capacidad disponible mientras tu solicitud estaba pendiente.`
           }
@@ -1679,11 +1616,15 @@ export const approveReservation = async (req: Request, res: Response) => {
       });
 
       // Crear notificación para el usuario
+      const confirmedType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_confirmed' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_confirmed',
+          typeId: confirmedType!.id,
           title: 'Reserva Aprobada',
           message: `Tu reserva para ${reservation.amenity.name} ha sido aprobada por un administrador.`
         }
@@ -1718,10 +1659,6 @@ export const approveReservation = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/reservations/:id/reject - Rechazar una reserva pendiente
- * Acceso: Solo administradores
- */
 export const rejectReservation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1786,11 +1723,15 @@ export const rejectReservation = async (req: Request, res: Response) => {
         ? `Tu reserva para ${reservation.amenity.name} ha sido rechazada. Motivo: ${reason}`
         : `Tu reserva para ${reservation.amenity.name} ha sido rechazada por un administrador.`;
 
+      const cancelledType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_cancelled' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_cancelled',
+          typeId: cancelledType!.id,
           title: 'Reserva Rechazada',
           message: notificationMessage
         }
@@ -1827,10 +1768,6 @@ export const rejectReservation = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/reservations/pending - Obtener todas las reservas pendientes
- * Acceso: Solo administradores
- */
 export const getPendingReservations = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -1883,11 +1820,6 @@ export const getPendingReservations = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/reservations/:id/cancel - Cancelar cualquier reserva (admin)
- * Acceso: Solo administradores
- * Permite al admin cancelar reservas confirmadas, pendientes, o incluso pasadas
- */
 export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1952,11 +1884,15 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
         ? `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador. Motivo: ${reason}`
         : `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador.`;
 
+      const cancelledType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_cancelled' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_cancelled',
+          typeId: cancelledType!.id,
           title: 'Reserva Cancelada por Administrador',
           message: notificationMessage
         }

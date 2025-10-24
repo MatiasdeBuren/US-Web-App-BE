@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 import { emailService } from "../services/emailService";
 
-// Create a reservation
+// Crear una nueva reserva
 export const createReservation = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -16,7 +16,7 @@ export const createReservation = async (req: Request, res: Response) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
-    // Validate that the dates are valid
+    // Validar fechas
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return res.status(400).json({ message: "Formato de fecha inválido" });
     }
@@ -35,8 +35,7 @@ export const createReservation = async (req: Request, res: Response) => {
       const startDate = new Date(startTime);
       const endDate = new Date(endTime);
       
-      // Convert UTC to Argentina time (UTC-3)
-      // Use toLocaleString to get local time components in Argentina timezone
+      // Parte de unificar horarios
       const argTimezone = 'America/Argentina/Buenos_Aires';
       
       const startLocalStr = startDate.toLocaleString('en-US', { 
@@ -63,7 +62,7 @@ export const createReservation = async (req: Request, res: Response) => {
       const [openTimeHour, openTimeMin] = amenity.openTime.split(':').map(Number);
       const [closeTimeHour, closeTimeMin] = amenity.closeTime.split(':').map(Number);
 
-      // Convert to minutes for easier comparison
+      // pasar todo a minutos
       const startTimeInMinutes = startHour * 60 + startMinutes;
       const endTimeInMinutes = endHour * 60 + endMinutes;
       const openTimeInMinutes = openTimeHour * 60 + openTimeMin;
@@ -89,7 +88,7 @@ export const createReservation = async (req: Request, res: Response) => {
 
     if (start >= end) return res.status(400).json({ message: "La hora de inicio debe ser anterior a la hora de finalización" });
 
-    // Check if user has any overlapping reservations (same time, any amenity)
+    // Checkear si el usuario tiene reservas superpuestas (misma hora, cualquier amenity)
     const userOverlappingReservation = await prisma.reservation.findFirst({
       where: {
         userId,
@@ -105,7 +104,7 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Ya tenes una reserva a esta hora" });
     }
 
-    // Check if user already has a reservation for this amenity on the same day
+    // Checkear si el usuario ya tiene una reserva para la misma amenity en el mismo día
     const startOfDay = new Date(start);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(start);
@@ -142,9 +141,9 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "El horario está lleno" });
     }
 
-    // Create reservation with transaction to also create notification
+    // Crear la reserva dentro de una transacción
     const reservation = await prisma.$transaction(async (tx) => {
-      // Determine initial status based on requiresApproval
+      // Estado inicial según requiresApproval
       const initialStatus = amenity.requiresApproval ? "pendiente" : "confirmada";
       
       const newReservation = await tx.reservation.create({
@@ -165,7 +164,7 @@ export const createReservation = async (req: Request, res: Response) => {
       });
 
       if (amenity.requiresApproval) {
-        // Get notification type for pending reservation
+        
         const userNotificationType = await tx.userNotificationType.findUnique({
           where: { name: 'reserva_pendiente' }
         });
@@ -174,7 +173,7 @@ export const createReservation = async (req: Request, res: Response) => {
           throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
         }
 
-        // Create in-app notification for user about pending status
+        // Crear notificación para el usuario
         await tx.userNotification.create({
           data: {
             userId,
@@ -185,13 +184,13 @@ export const createReservation = async (req: Request, res: Response) => {
           }
         });
 
-        // Create notifications for all admins
+        // Crear notificaciones para todos los admins
         const admins = await tx.user.findMany({
           where: { role: 'admin' },
           select: { id: true }
         });
 
-        // Get notification type for admin pending reservation
+        // Tipo de notificación para admins
         const adminNotificationType = await tx.adminNotificationType.findUnique({
           where: { name: 'reserva_pendiente' }
         });
@@ -200,7 +199,7 @@ export const createReservation = async (req: Request, res: Response) => {
           throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
         }
 
-        // Create admin notifications for pending reservations
+        // Crear notificaciones para todos los admins
         await Promise.all(
           admins.map(admin =>
             tx.adminNotification.create({
@@ -214,13 +213,11 @@ export const createReservation = async (req: Request, res: Response) => {
           )
         );
       }
-      // Note: No notification created for auto-confirmed reservations
-      // User gets immediate feedback via success toast in frontend
 
       return newReservation;
     });
 
-    // Send confirmation email only if reservation is auto-confirmed (async, don't wait)
+    // Se manda el email de confirmación solo si la reserva es auto-confirmada
     if (!amenity.requiresApproval) {
       emailService.sendReservationConfirmationEmail(
         reservation.user.email,
@@ -238,7 +235,7 @@ export const createReservation = async (req: Request, res: Response) => {
   }
 };
 
-// Get all reservations of the logged-in user
+// Obtiene todas las reservas del usuario autenticado
 export const getUserReservations = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
@@ -269,7 +266,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
 
     if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
-    // Check if reservation exists and belongs to user
+    // Checkea si la reserva existe y pertenece al usuario
     const reservation = await prisma.reservation.findUnique({
       where: { id: Number(id) },
       include: {
@@ -283,7 +280,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
     if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
     if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
-    // Update status to cancelled WITHOUT creating notification (user gets toast in frontend)
+    // Cambia estado a cancelada
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { status: { connect: { name: "cancelada" } } },
@@ -296,7 +293,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
       }
     });
 
-    // Send cancellation email (async, don't wait)
+    // Mandar email de cancelación
     emailService.sendReservationCancellationEmail(
       reservation.user.email,
       reservation.user.name,
@@ -363,7 +360,6 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
     const { id } = req.params; // reservation ID
     if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
-    // Check if reservation exists and belongs to user
     const reservation = await prisma.reservation.findUnique({
       where: { id: Number(id) },
     });
@@ -371,7 +367,6 @@ export const hideReservationFromUser = async (req: Request, res: Response) => {
     if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
     if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
-    // Update hiddenFromUser to true
     const updated = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { hiddenFromUser: true },

@@ -165,12 +165,21 @@ export const createReservation = async (req: Request, res: Response) => {
       });
 
       if (amenity.requiresApproval) {
+        // Get notification type for pending reservation
+        const userNotificationType = await tx.userNotificationType.findUnique({
+          where: { name: 'reserva_pendiente' }
+        });
+
+        if (!userNotificationType) {
+          throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
+        }
+
         // Create in-app notification for user about pending status
         await tx.userNotification.create({
           data: {
             userId,
             reservationId: newReservation.id,
-            notificationType: 'pending_reservation',
+            typeId: userNotificationType.id,
             title: 'Reserva Pendiente de Aprobación',
             message: `Tu solicitud de reserva para ${amenity.name} está pendiente de aprobación por un administrador.`
           }
@@ -182,6 +191,15 @@ export const createReservation = async (req: Request, res: Response) => {
           select: { id: true }
         });
 
+        // Get notification type for admin pending reservation
+        const adminNotificationType = await tx.adminNotificationType.findUnique({
+          where: { name: 'reserva_pendiente' }
+        });
+
+        if (!adminNotificationType) {
+          throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
+        }
+
         // Create admin notifications for pending reservations
         await Promise.all(
           admins.map(admin =>
@@ -189,7 +207,7 @@ export const createReservation = async (req: Request, res: Response) => {
               data: {
                 adminId: admin.id,
                 reservationId: newReservation.id,
-                notificationType: 'pending_reservation',
+                typeId: adminNotificationType.id,
                 isRead: false
               }
             })

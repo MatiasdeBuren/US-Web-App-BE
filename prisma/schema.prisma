@@ -150,7 +150,7 @@ model ClaimAdhesion {
   id           Int      @id @default(autoincrement())
   claimId      Int
   userId       Int
-  isSupport    Boolean  @default(true) // true = support, false = disagree
+  isSupport    Boolean  @default(true) // Likes/dislike de vecinos. true = de acuerdo, false = en desacuerdo
   
   claim        Claim    @relation("ClaimAdhesions", fields: [claimId], references: [id], onDelete: Cascade)
   user         User     @relation("UserClaimAdhesions", fields: [userId], references: [id], onDelete: Cascade)

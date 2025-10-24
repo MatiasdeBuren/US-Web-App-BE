@@ -32,18 +32,18 @@ model Amenity {
   id           Int           @id @default(autoincrement())
   name         String
   capacity     Int
-  maxDuration  Int           // in minutes
-  openTime     String?       // "08:00" formato HH:mm - opcional por ahora
-  closeTime    String?       // "19:00" formato HH:mm - opcional por ahora
+  maxDuration  Int 
+  openTime     String?  
+  closeTime    String? 
   isActive     Boolean       @default(true)
-  requiresApproval Boolean   @default(false) // If true, reservations need admin approval
+  requiresApproval Boolean   @default(false)
   reservations Reservation[]
 }
 
 model ReservationStatus {
   id     Int    @id @default(autoincrement())
   name   String @unique // "pendiente", "confirmada", "cancelada", "finalizada"
-  label  String // Spanish labels for display
+  label  String 
   
   reservations Reservation[]
   
@@ -58,7 +58,7 @@ model Reservation {
   amenityId Int
   startTime DateTime
   endTime   DateTime
-  statusId  Int       @default(1) // Default to "pendiente" (assuming it has id 1)
+  statusId  Int       @default(1)
   status    ReservationStatus @relation(fields: [statusId], references: [id])
   hiddenFromUser Boolean   @default(false)
   createdAt DateTime  @default(now())
@@ -86,9 +86,9 @@ model Apartment {
 model ClaimCategory {
   id     Int    @id @default(autoincrement())
   name   String @unique // "ascensor", "plomeria", "electricidad", "temperatura", "areas_comunes", "edificio", "otro"
-  label  String // Spanish labels for display
-  icon   String? // Icon identifier for frontend
-  color  String? // Color for UI display
+  label  String 
+  icon   String?
+  color  String? 
   
   claims Claim[]
   
@@ -98,9 +98,9 @@ model ClaimCategory {
 model ClaimPriority {
   id     Int    @id @default(autoincrement())
   name   String @unique // "baja", "media", "alta", "urgente"
-  label  String // Spanish labels for display
-  level  Int    // Numeric priority level (1=lowest, 4=highest)
-  color  String? // Color for UI display
+  label  String
+  level  Int
+  color  String?
   
   claims Claim[]
   
@@ -110,8 +110,8 @@ model ClaimPriority {
 model ClaimStatus {
   id     Int    @id @default(autoincrement())
   name   String @unique // "pendiente", "en_progreso", "resuelto", "rechazado"
-  label  String // Spanish labels for display
-  color  String? // Color for UI display
+  label  String 
+  color  String?
   
   claims Claim[]
   
@@ -121,16 +121,16 @@ model ClaimStatus {
 model Claim {
   id          Int      @id @default(autoincrement())
   subject     String
-  categoryId  Int      @default(7) // Default to "otro" (assuming it has id 7)
+  categoryId  Int      @default(7)
   category    ClaimCategory @relation(fields: [categoryId], references: [id])
   description String
   location    String
-  priorityId  Int      @default(2) // Default to "media" (assuming it has id 2)
+  priorityId  Int      @default(2)
   priority    ClaimPriority @relation(fields: [priorityId], references: [id])
-  statusId    Int      @default(1) // Default to "pendiente" (assuming it has id 1)
+  statusId    Int      @default(1)
   status      ClaimStatus @relation(fields: [statusId], references: [id])
   adminNotes  String?
-  isAnonymous Boolean  @default(false) // Tracks if claim was created as anonymous
+  isAnonymous Boolean  @default(false)
   
   userId      Int
   user        User     @relation("UserClaims", fields: [userId], references: [id])
@@ -150,7 +150,7 @@ model ClaimAdhesion {
   id           Int      @id @default(autoincrement())
   claimId      Int
   userId       Int
-  adhesionType String   // "support" | "disagree"
+  isSupport    Boolean  @default(true) // true = support, false = disagree
   
   claim        Claim    @relation("ClaimAdhesions", fields: [claimId], references: [id], onDelete: Cascade)
   user         User     @relation("UserClaimAdhesions", fields: [userId], references: [id], onDelete: Cascade)
@@ -163,12 +163,33 @@ model ClaimAdhesion {
   @@index([userId])
 }
 
+model AdminNotificationType {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "nuevo_reclamo" | "reclamo_urgente" | "reserva_pendiente"
+  label  String
+  
+  notifications AdminNotification[]
+  
+  @@map("admin_notification_types")
+}
+
+model UserNotificationType {
+  id     Int    @id @default(autoincrement())
+  name   String @unique // "reserva_confirmada" | "reserva_cancelada" | "reserva_modificada"
+  label  String
+  
+  notifications UserNotification[]
+  
+  @@map("user_notification_types")
+}
+
 model AdminNotification {
   id               Int      @id @default(autoincrement())
-  adminId          Int      // Foreign key to User (admin)
-  claimId          Int?     // Foreign key to Claim (optional)
-  reservationId    Int?     // Foreign key to Reservation (optional)
-  notificationType String   // "new_claim" | "urgent_claim" | "pending_reservation"
+  adminId          Int 
+  claimId          Int? 
+  reservationId    Int?
+  typeId           Int
+  type             AdminNotificationType @relation(fields: [typeId], references: [id])
   isRead           Boolean  @default(false)
   createdAt        DateTime @default(now())
   readAt           DateTime?
@@ -180,18 +201,20 @@ model AdminNotification {
   @@index([adminId])
   @@index([claimId])
   @@index([reservationId])
+  @@index([typeId])
   @@index([isRead])
-  @@index([adminId, isRead]) // Composite index for filtering unread notifications by admin
+  @@index([adminId, isRead])
   @@map("admin_notifications")
 }
 
 model UserNotification {
   id               Int      @id @default(autoincrement())
-  userId           Int      // Foreign key to User
-  reservationId    Int?     // Foreign key to Reservation (optional, as notification might be about other things)
-  notificationType String   // "reservation_confirmed" | "reservation_cancelled" | "reservation_modified" | "reservation_reminder"
-  title            String   // Notification title
-  message          String   // Notification message
+  userId           Int
+  reservationId    Int?
+  typeId           Int
+  type             UserNotificationType @relation(fields: [typeId], references: [id])
+  title            String
+  message          String 
   isRead           Boolean  @default(false)
   createdAt        DateTime @default(now())
   readAt           DateTime?
@@ -201,7 +224,8 @@ model UserNotification {
   
   @@index([userId])
   @@index([reservationId])
+  @@index([typeId])
   @@index([isRead])
-  @@index([userId, isRead]) // Composite index for filtering unread notifications by user
+  @@index([userId, isRead])
   @@map("user_notifications")
 }

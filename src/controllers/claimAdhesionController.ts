@@ -32,10 +32,10 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
     // Obtener conteos de adhesiones
     const [supportCount, disagreeCount, userAdhesion] = await Promise.all([
       prisma.claimAdhesion.count({
-        where: { claimId, adhesionType: "support" }
+        where: { claimId, isSupport: true }
       }),
       prisma.claimAdhesion.count({
-        where: { claimId, adhesionType: "disagree" }
+        where: { claimId, isSupport: false }
       }),
       prisma.claimAdhesion.findUnique({
         where: {
@@ -44,16 +44,16 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
             userId
           }
         },
-        select: { adhesionType: true }
+        select: { isSupport: true }
       })
     ]);
 
-    console.log(`📊 [CLAIM ADHESIONS] Claim ${claimId}: Support=${supportCount}, Disagree=${disagreeCount}, User=${userAdhesion?.adhesionType || 'none'}`);
+    console.log(`📊 [CLAIM ADHESIONS] Claim ${claimId}: Support=${supportCount}, Disagree=${disagreeCount}, User=${userAdhesion?.isSupport !== undefined ? (userAdhesion.isSupport ? 'support' : 'disagree') : 'none'}`);
 
     res.json({
       total_support: supportCount,
       total_disagree: disagreeCount,
-      user_adhesion: userAdhesion?.adhesionType || null
+      user_adhesion: userAdhesion?.isSupport
     });
 
   } catch (error) {
@@ -62,11 +62,7 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /claims/:id/adhesions - Crear o actualizar adhesión a un claim
- * Acceso: Usuarios autenticados
- * Body: { adhesion_type: "support" | "disagree" }
- */
+
 export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -84,9 +80,9 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
     }
 
     // Validar adhesion_type
-    if (!adhesion_type || !["support", "disagree"].includes(adhesion_type)) {
+    if (adhesion_type === undefined || typeof adhesion_type !== 'boolean') {
       return res.status(400).json({ 
-        message: "adhesion_type debe ser 'support' o 'disagree'" 
+        message: "adhesion_type debe ser un booleano: true (support) o false (disagree)" 
       });
     }
 
@@ -117,19 +113,20 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
         }
       },
       update: {
-        adhesionType: adhesion_type,
+        isSupport: adhesion_type,
         updatedAt: new Date()
       },
       create: {
         claimId,
         userId,
-        adhesionType: adhesion_type
+        isSupport: adhesion_type
       }
     });
 
     const action = adhesion.createdAt.getTime() === adhesion.updatedAt.getTime() ? "creada" : "actualizada";
+    const adhesionTypeStr = adhesion_type ? 'support' : 'disagree';
     
-    console.log(`✅ [CLAIM ADHESION] User ${userEmail} ${action} adhesión '${adhesion_type}' to claim ${claimId}`);
+    console.log(`✅ [CLAIM ADHESION] User ${userEmail} ${action} adhesión '${adhesionTypeStr}' to claim ${claimId}`);
 
     res.status(200).json({
       message: `Adhesión ${action}`,

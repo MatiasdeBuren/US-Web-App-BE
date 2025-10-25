@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 import { emailService } from "../services/emailService";
 
-// Crear una nueva reserva
 export const createReservation = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -16,7 +15,6 @@ export const createReservation = async (req: Request, res: Response) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
-    // Validar fechas
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return res.status(400).json({ message: "Formato de fecha inválido" });
     }
@@ -24,14 +22,13 @@ export const createReservation = async (req: Request, res: Response) => {
     const amenity = await prisma.amenity.findUnique({ where: { id: amenityId } });
     if (!amenity) return res.status(404).json({ message: "Amenity no encontrada" });
 
-    // Validar que la amenity esté activa
     if (!amenity.isActive) {
       return res.status(400).json({ message: "Esta amenity no está disponible" });
     }
 
     // Validar horarios de operación (solo si están definidos)
     if (amenity.openTime && amenity.closeTime) {
-      // Parse the UTC timestamps and convert to Argentina time for validation
+      
       const startDate = new Date(startTime);
       const endDate = new Date(endTime);
       
@@ -88,7 +85,6 @@ export const createReservation = async (req: Request, res: Response) => {
 
     if (start >= end) return res.status(400).json({ message: "La hora de inicio debe ser anterior a la hora de finalización" });
 
-    // Checkear si el usuario tiene reservas superpuestas (misma hora, cualquier amenity)
     const userOverlappingReservation = await prisma.reservation.findFirst({
       where: {
         userId,
@@ -104,7 +100,6 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Ya tenes una reserva a esta hora" });
     }
 
-    // Checkear si el usuario ya tiene una reserva para la misma amenity en el mismo día
     const startOfDay = new Date(start);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(start);
@@ -141,9 +136,8 @@ export const createReservation = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "El horario está lleno" });
     }
 
-    // Crear la reserva dentro de una transacción
     const reservation = await prisma.$transaction(async (tx) => {
-      // Estado inicial según requiresApproval
+      
       const initialStatus = amenity.requiresApproval ? "pendiente" : "confirmada";
       
       const newReservation = await tx.reservation.create({
@@ -173,7 +167,6 @@ export const createReservation = async (req: Request, res: Response) => {
           throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
         }
 
-        // Crear notificación para el usuario
         await tx.userNotification.create({
           data: {
             userId,
@@ -184,13 +177,11 @@ export const createReservation = async (req: Request, res: Response) => {
           }
         });
 
-        // Crear notificaciones para todos los admins
         const admins = await tx.user.findMany({
           where: { role: 'admin' },
           select: { id: true }
         });
 
-        // Tipo de notificación para admins
         const adminNotificationType = await tx.adminNotificationType.findUnique({
           where: { name: 'reserva_pendiente' }
         });
@@ -199,7 +190,6 @@ export const createReservation = async (req: Request, res: Response) => {
           throw new Error('Tipo de notificación no encontrado: reserva_pendiente');
         }
 
-        // Crear notificaciones para todos los admins
         await Promise.all(
           admins.map(admin =>
             tx.adminNotification.create({
@@ -235,7 +225,6 @@ export const createReservation = async (req: Request, res: Response) => {
   }
 };
 
-// Obtiene todas las reservas del usuario autenticado
 export const getUserReservations = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
@@ -266,7 +255,6 @@ export const cancelReservation = async (req: Request, res: Response) => {
 
     if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
-    // Checkea si la reserva existe y pertenece al usuario
     const reservation = await prisma.reservation.findUnique({
       where: { id: Number(id) },
       include: {
@@ -280,7 +268,6 @@ export const cancelReservation = async (req: Request, res: Response) => {
     if (!reservation) return res.status(404).json({ message: "Reserva no encontrada" });
     if (reservation.userId !== userId) return res.status(403).json({ message: "No autorizado" });
 
-    // Cambia estado a cancelada
     const cancelled = await prisma.reservation.update({
       where: { id: Number(id) },
       data: { status: { connect: { name: "cancelada" } } },
@@ -293,7 +280,7 @@ export const cancelReservation = async (req: Request, res: Response) => {
       }
     });
 
-    // Mandar email de cancelación
+    // email de cancelación
     emailService.sendReservationCancellationEmail(
       reservation.user.email,
       reservation.user.name,
@@ -357,7 +344,7 @@ export const getAmenityReservations = async (req: Request, res: Response) => {
 export const hideReservationFromUser = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    const { id } = req.params; // reservation ID
+    const { id } = req.params;
     if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
 
     const reservation = await prisma.reservation.findUnique({

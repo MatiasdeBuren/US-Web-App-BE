@@ -23,18 +23,16 @@ const PORT = parseInt(process.env.PORT || '3000');
 app.use(cors());
 app.use(express.json());
 
-// Test email service connection on startup
 emailService.testConnection().then(isConnected => {
   if (isConnected) {
-    console.log('✅ Email service is ready');
+    console.log('Email service is ready');
   } else {
-    console.log('⚠️ Email service connection failed - check your configuration');
+    console.log('Email service connection failed - check your configuration');
   }
 }).catch(error => {
-  console.log('⚠️ Email service initialization error:', error.message);
+  console.log('Email service initialization error:', error.message);
 });
 
-// Routes
 app.use("/auth", authRoutes);
 app.use("/amenities", amenityRoutes);
 app.use("/reservations", reservationRoutes);
@@ -42,13 +40,11 @@ app.use("/user", userRoutes);
 
 app.use("/apartments", apartmentRoutes);
 app.use("/claims", claimRoutes);
-app.use("/claims", claimAdhesionRoutes); // Las rutas de adhesiones son subrutas de claims
+app.use("/claims", claimAdhesionRoutes); 
 
-app.use("/admin", adminRoutes); // 🔒 Rutas de administración
+app.use("/admin", adminRoutes); 
 
 
-
-// Protected route - Dashboard con role actualizado desde BD
 app.get("/dashboard", requireAuth, async (req, res) => {
     try {
         const userId = (req as any).user?.id;
@@ -56,7 +52,6 @@ app.get("/dashboard", requireAuth, async (req, res) => {
             return res.status(401).json({ message: "User ID not found in token" });
         }
 
-        // Consultar BD para obtener información actualizada del usuario incluido el role
         const user = await prisma.user.findUnique({
             where: { id: userId },
             select: {
@@ -83,28 +78,27 @@ app.get("/dashboard", requireAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error("❌ Dashboard error:", error);
+        console.error("Dashboard error:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 });
 
 
-// Initialize services on startup
 async function initializeServices() {
   try {
-    console.log('🔄 Initializing lookup tables...');
+    console.log('Initializing lookup tables...');
     await ClaimLookupService.initializeClaimLookupTables();
     
-    console.log('🔄 Starting reservation status service...');
+    console.log('Starting reservation status service...');
     ReservationStatusService.startAutoUpdate();
     
-    console.log('✅ All services initialized successfully');
+    console.log('All services initialized successfully');
   } catch (error) {
-    console.error('❌ Error initializing services:', error);
+    console.error('Error initializing services:', error);
   }
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
   await initializeServices();
 });

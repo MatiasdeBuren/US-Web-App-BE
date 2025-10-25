@@ -30,7 +30,7 @@ class EmailService {
   }
 
   private createTransporter() {
-    // Multiple email service configurations
+    
     const emailService = process.env.EMAIL_SERVICE?.toLowerCase();
 
     switch (emailService) {
@@ -43,10 +43,10 @@ class EmailService {
         this.transporter = nodemailer.createTransport({
           host: 'smtp.gmail.com',
           port: 587,
-          secure: false, // true for 465, false for other ports
+          secure: false, 
           auth: {
             user: process.env.EMAIL_USER!,
-            pass: process.env.EMAIL_APP_PASSWORD!, // App password, not regular password
+            pass: process.env.EMAIL_APP_PASSWORD!,
           },
           tls: {
             rejectUnauthorized: false // Allow self-signed certificates
@@ -63,7 +63,7 @@ class EmailService {
           this.createMockTransporter();
           return;
         }
-        // Use SendGrid API instead of SMTP (avoids port blocking on Render)
+        
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
         this.useSendGridAPI = true;
         console.log('✅ SendGrid API configured');
@@ -971,5 +971,4 @@ Este es un correo automático, por favor no respondas a esta dirección.
   }
 }
 
-// Singleton instance
 export const emailService = new EmailService();

@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
 
-// Get all apartments
 export const getApartments = async (req: Request, res: Response) => {
   try {
     const apartments = await prisma.apartment.findMany({
@@ -37,7 +36,6 @@ export const getApartments = async (req: Request, res: Response) => {
   }
 };
 
-// Get apartment by ID
 export const getApartmentById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

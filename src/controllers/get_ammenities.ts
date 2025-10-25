@@ -4,7 +4,6 @@ import { prisma } from "../prismaClient";
 // GET /amenities
 export const getAmenities = async (req: Request, res: Response) => {
   try {
-    // Opcional: puedes usar (req as any).user si quieres filtrar amenities por usuario
     const amenities = await prisma.amenity.findMany({
       select: {
         id: true,

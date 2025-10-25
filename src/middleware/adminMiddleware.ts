@@ -2,14 +2,12 @@ import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prismaClient";
 
-// Interfaz para el payload del JWT
 interface JWTPayload {
   id: number;
   email: string;
   role?: string;
 }
 
-// Función para registrar logs de seguridad
 const logSecurityEvent = (
   event: "UNAUTHORIZED_ADMIN_ACCESS" | "ADMIN_ACCESS_SUCCESS" | "INVALID_TOKEN",
   req: Request,
@@ -31,10 +29,6 @@ const logSecurityEvent = (
   });
 };
 
-/**
- * Middleware que valida que el usuario sea administrador
- * SEGURIDAD: Verifica JWT + consulta BD + logs de seguridad
- */
 export const validateAdmin = async (req: Request, res: Response, next: NextFunction) => {
   console.log(`🔍 [ADMIN MIDDLEWARE] Iniciando validación para ${req.method} ${req.originalUrl}`);
   try {
@@ -64,7 +58,6 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    // 1. Verificar y decodificar JWT
     let payload: JWTPayload;
     try {
       const jwtSecret = process.env.JWT_SECRET;
@@ -81,7 +74,6 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    // 2. CRÍTICO: Consultar BD para verificar role actual (no confiar solo en token)
     console.log(`🔍 [ADMIN MIDDLEWARE] Consultando usuario ID: ${payload.id}`);
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
@@ -101,7 +93,6 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    // 3. VERIFICACIÓN CRÍTICA: Validar que el role sea admin
     if (user.role !== "admin") {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req, user.id, user.email);
       return res.status(403).json({ 
@@ -109,12 +100,10 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    // 4. Log de acceso exitoso
     logSecurityEvent("ADMIN_ACCESS_SUCCESS", req, user.id, user.email);
 
-    // 5. Agregar información del usuario a la request
     (req as any).user = user;
-    (req as any).userId = user.id; // Add userId for compatibility
+    (req as any).userId = user.id; 
     
     next();
 
@@ -135,10 +124,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-/**
- * Función helper para verificar si existe al menos un admin en el sistema
- * Usado para prevenir eliminación del último admin
- */
+
 export const ensureAdminExists = async (): Promise<boolean> => {
   try {
     const adminCount = await prisma.user.count({
@@ -151,10 +137,7 @@ export const ensureAdminExists = async (): Promise<boolean> => {
   }
 };
 
-/**
- * Función helper para verificar si sería el último admin
- * Usado antes de cambiar role de un admin
- */
+
 export const wouldBeLastAdmin = async (userId: number): Promise<boolean> => {
   try {
     const user = await prisma.user.findUnique({
@@ -163,16 +146,16 @@ export const wouldBeLastAdmin = async (userId: number): Promise<boolean> => {
     });
 
     if (user?.role !== "admin") {
-      return false; // No es admin, no hay problema
+      return false;
     }
 
     const adminCount = await prisma.user.count({
       where: { role: "admin" }
     });
 
-    return adminCount === 1; // Es el único admin
+    return adminCount === 1; 
   } catch (error) {
     console.error("❌ Error checking if would be last admin:", error);
-    return true; // En caso de error, asumir que sí sería el último (más seguro)
+    return true; 
   }
 };

@@ -1,17 +1,10 @@
 import { prisma } from "../prismaClient";
 
-/**
- * Servicio para actualizar automáticamente el estado de las reservas
- * Ahora usando la tabla ReservationStatus
- */
+
 export class ReservationStatusService {
-  
-  // Cache for status IDs to avoid repeated DB queries
+
   private static statusIds: { [key: string]: number } | null = null;
 
-  /**
-   * Inicializa y cachea los IDs de los estados de reserva
-   */
   private static async initializeStatusIds(): Promise<void> {
     if (this.statusIds) return;
 
@@ -32,26 +25,16 @@ export class ReservationStatusService {
     }
   }
 
-  /**
-   * Obtiene el ID de un estado por su nombre
-   */
   private static async getStatusId(statusName: string): Promise<number | null> {
     await this.initializeStatusIds();
     return this.statusIds?.[statusName] || null;
   }
 
-  /**
-   * Actualiza reservas cuyo tiempo ha expirado a estado "finalizada"
-   * @returns Número de reservas actualizadas
-   */
   static async updateExpiredReservations(): Promise<number> {
     try {
       const now = new Date();
       
-      // Verificar conexión de base de datos antes de intentar la actualización
       await prisma.$connect();
-
-      // Obtener IDs de estados
       const confirmadaId = await this.getStatusId('confirmada');
       const finalizadaId = await this.getStatusId('finalizada');
 
@@ -60,16 +43,15 @@ export class ReservationStatusService {
         return 0;
       }
       
-      // Actualizar reservas confirmadas que ya pasaron su hora de fin
       const result = await prisma.reservation.updateMany({
         where: {
-          statusId: confirmadaId, // Estado "confirmada"
+          statusId: confirmadaId, 
           endTime: {
-            lt: now // endTime menor que ahora (ya pasó)
+            lt: now
           }
         },
         data: {
-          statusId: finalizadaId // Cambiar a "finalizada"
+          statusId: finalizadaId 
         }
       });
 
@@ -79,7 +61,7 @@ export class ReservationStatusService {
 
       return result.count;
     } catch (error) {
-      // Log del error pero no fallar completamente
+      
       if (error instanceof Error && error.message.includes("Can't reach database server")) {
         console.log("⚠️ [RESERVATION SERVICE] Base de datos temporalmente no disponible, reintentando en el próximo ciclo");
       } else {
@@ -89,35 +71,22 @@ export class ReservationStatusService {
     }
   }
 
-  /**
-   * Inicia el servicio de actualización automática
-   * Ejecuta la actualización cada 5 minutos
-   */
   static startAutoUpdate(): void {
     console.log("🚀 [RESERVATION SERVICE] Iniciando servicio de actualización automática de reservas");
     
-    // Ejecutar después de 30 segundos para permitir que la conexión DB se establezca completamente
     setTimeout(() => {
       this.updateExpiredReservations();
     }, 30000);
-    
-    // Ejecutar cada 5 minutos (300,000 ms)
+
     setInterval(() => {
       this.updateExpiredReservations();
     }, 5 * 60 * 1000);
   }
 
-  /**
-   * Función que se puede llamar manualmente antes de obtener reservas
-   * para asegurar que los estados estén actualizados
-   */
   static async ensureUpdatedReservations(): Promise<void> {
     await this.updateExpiredReservations();
   }
 
-  /**
-   * Inicializa los estados de reserva en la base de datos si no existen
-   */
   static async initializeReservationStatuses(): Promise<void> {
     try {
       const statuses = [
@@ -137,7 +106,6 @@ export class ReservationStatusService {
 
       console.log('✅ [RESERVATION SERVICE] Reservation statuses initialized');
       
-      // Reset cache to pick up new/updated statuses
       this.statusIds = null;
       
     } catch (error) {

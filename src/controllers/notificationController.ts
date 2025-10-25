@@ -13,7 +13,6 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
 
     console.log(`📬 [ADMIN NOTIFICATIONS] Admin ${adminUser.email} requesting notifications`);
 
-    // Obtener todas las notificaciones para este admin
     const notifications = await prisma.adminNotification.findMany({
       where: { adminId: adminUser.id },
       include: {
@@ -35,7 +34,6 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Count de notificaciones no leídas
     const unreadCount = await prisma.adminNotification.count({
       where: { 
         adminId: adminUser.id,
@@ -43,7 +41,6 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       }
     });
 
-    // Formatear notificaciones según la estructura requerida
     const formattedNotifications = notifications
       .filter(notification => notification.claim !== null)
       .map(notification => {
@@ -162,7 +159,7 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
 
     const now = new Date();
     
-    // Actualizar todas las notificaciones no leídas para este admin
+    // Actualiza solo  notificaciones no leídas
     const updateResult = await prisma.adminNotification.updateMany({
       where: {
         adminId: adminUser.id,
@@ -202,7 +199,6 @@ export const getUserNotifications = async (req: Request, res: Response) => {
 
     console.log(`📬 [USER NOTIFICATIONS] User ${user.email} requesting notifications`);
 
-    // Obtener todas las notificaciones para este usuario
     const notifications = await prisma.userNotification.findMany({
       where: { userId: user.id },
       include: {
@@ -219,10 +215,9 @@ export const getUserNotifications = async (req: Request, res: Response) => {
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: 50 // Limita a las 50 notificaciones más recientes
+      take: 50
     });
 
-    // Count de las notificaciones no leídas
     const unreadCount = await prisma.userNotification.count({
       where: { 
         userId: user.id,
@@ -230,7 +225,6 @@ export const getUserNotifications = async (req: Request, res: Response) => {
       }
     });
 
-    // Formateo de notificaciones
     const formattedNotifications = notifications.map(notification => ({
       id: notification.id.toString(),
       type: notification.type.name,
@@ -338,7 +332,6 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
 
     const now = new Date();
     
-    // Actualizar todas las notificaciones no leídas para este usuario
     const updateResult = await prisma.userNotification.updateMany({
       where: {
         userId: user.id,
@@ -395,7 +388,6 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
 
-    // Eliminar notificación
     await prisma.userNotification.delete({
       where: { id: notificationId }
     });

@@ -1,18 +1,14 @@
 import { prisma } from "../prismaClient";
 
-/**
- * Servicio para gestionar las tablas de referencia de claims
- */
+
 export class ClaimLookupService {
   
-  // Cache for lookup IDs to avoid repeated DB queries
+  
   private static categoryIds: { [key: string]: number } | null = null;
   private static priorityIds: { [key: string]: number } | null = null;
   private static statusIds: { [key: string]: number } | null = null;
 
-  /**
-   * Inicializa y cachea los IDs de las categorías
-   */
+
   private static async initializeCategoryIds(): Promise<void> {
     if (this.categoryIds) return;
 
@@ -33,9 +29,7 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Inicializa y cachea los IDs de las prioridades
-   */
+
   private static async initializePriorityIds(): Promise<void> {
     if (this.priorityIds) return;
 
@@ -56,9 +50,7 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Inicializa y cachea los IDs de los estados
-   */
+ 
   private static async initializeStatusIds(): Promise<void> {
     if (this.statusIds) return;
 
@@ -79,33 +71,22 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Obtiene el ID de una categoría por su nombre
-   */
   static async getCategoryId(categoryName: string): Promise<number | null> {
     await this.initializeCategoryIds();
     return this.categoryIds?.[categoryName] || null;
   }
 
-  /**
-   * Obtiene el ID de una prioridad por su nombre
-   */
+
   static async getPriorityId(priorityName: string): Promise<number | null> {
     await this.initializePriorityIds();
     return this.priorityIds?.[priorityName] || null;
   }
 
-  /**
-   * Obtiene el ID de un estado por su nombre
-   */
   static async getStatusId(statusName: string): Promise<number | null> {
     await this.initializeStatusIds();
     return this.statusIds?.[statusName] || null;
   }
 
-  /**
-   * Obtiene todas las categorías
-   */
   static async getAllCategories() {
     try {
       return await prisma.claimCategory.findMany({
@@ -117,9 +98,6 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Obtiene todas las prioridades ordenadas por nivel
-   */
   static async getAllPriorities() {
     try {
       return await prisma.claimPriority.findMany({
@@ -131,9 +109,6 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Obtiene todos los estados
-   */
   static async getAllStatuses() {
     try {
       return await prisma.claimStatus.findMany({
@@ -145,9 +120,6 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Inicializa todas las tablas de referencia si no existen
-   */
   static async initializeClaimLookupTables(): Promise<void> {
     try {
       // Categories
@@ -169,7 +141,6 @@ export class ClaimLookupService {
         });
       }
 
-      // Priorities
       const priorities = [
         { name: 'baja', label: 'Baja', level: 1, color: 'bg-blue-50 text-blue-700 border-blue-200' },
         { name: 'media', label: 'Media', level: 2, color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
@@ -185,7 +156,6 @@ export class ClaimLookupService {
         });
       }
 
-      // Statuses
       const statuses = [
         { name: 'pendiente', label: 'Pendiente', color: 'bg-yellow-50 text-yellow-700' },
         { name: 'en_progreso', label: 'En Progreso', color: 'bg-blue-50 text-blue-700' },
@@ -203,7 +173,6 @@ export class ClaimLookupService {
 
       console.log('✅ [CLAIM SERVICE] Claim lookup tables initialized');
       
-      // Reset caches to pick up new/updated values
       this.categoryIds = null;
       this.priorityIds = null;
       this.statusIds = null;
@@ -213,9 +182,6 @@ export class ClaimLookupService {
     }
   }
 
-  /**
-   * Convierte nombre de categoría/prioridad/estado a ID para crear/actualizar claims
-   */
   static async convertNamesToIds(data: {
     category?: string;
     priority?: string;

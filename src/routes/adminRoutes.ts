@@ -4,7 +4,6 @@ import {
   getSystemStats,
   getAllUsers,
   updateUserRole,
-  deleteUserAdmin,
   getAllReservations,
   createAmenity,
   updateAmenity,
@@ -38,7 +37,6 @@ router.get("/stats", validateAdmin, getSystemStats);
 
 router.get("/users", validateAdmin, getAllUsers);
 router.put("/users/:id/role", validateAdmin, updateUserRole);
-router.delete("/users/:id", validateAdmin, deleteUserAdmin);
 
 
 router.get("/reservations", validateAdmin, getAllReservations);

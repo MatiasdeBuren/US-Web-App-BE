@@ -1,10 +1,6 @@
 import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
 
-/**
- * GET /admin/notifications - Obtener todas las notificaciones del admin autenticado
- * Acceso: Solo administradores
- */
 export const getAdminNotifications = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -17,10 +13,10 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
 
     console.log(`📬 [ADMIN NOTIFICATIONS] Admin ${adminUser.email} requesting notifications`);
 
-    // Get all notifications for this admin with related claim and user data
     const notifications = await prisma.adminNotification.findMany({
       where: { adminId: adminUser.id },
       include: {
+        type: true,
         claim: {
           include: {
             user: {
@@ -38,7 +34,6 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Count unread notifications
     const unreadCount = await prisma.adminNotification.count({
       where: { 
         adminId: adminUser.id,
@@ -46,9 +41,8 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       }
     });
 
-    // Format notifications according to the required structure
     const formattedNotifications = notifications
-      .filter(notification => notification.claim !== null) // Filter out notifications without claims
+      .filter(notification => notification.claim !== null)
       .map(notification => {
         const userName = notification.claim!.isAnonymous ? 'Anónimo' : notification.claim!.user.name;
         const categoryLabel = notification.claim!.category.label || notification.claim!.category.name || 'General';
@@ -56,8 +50,8 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
         
         return {
           id: notification.id.toString(),
-          type: notification.notificationType,
-          title: `Nuevo reclamo ${notification.notificationType === 'urgent_claim' ? '(URGENTE)' : ''}`,
+          type: notification.type.name,
+          title: `Nuevo reclamo ${notification.type.name === 'urgent_claim' ? '(URGENTE)' : ''}`,
           message: `${userName} creó un reclamo: "${notification.claim!.subject}" en la categoría ${categoryLabel}`,
           isRead: notification.isRead,
           createdAt: notification.createdAt.toISOString(),
@@ -90,10 +84,6 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /admin/notifications/:id/mark-read - Marcar una notificación específica como leída
- * Acceso: Solo administradores
- */
 export const markNotificationRead = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -112,7 +102,6 @@ export const markNotificationRead = async (req: Request, res: Response) => {
     const notificationId = parseInt(id);
     console.log(`📖 [MARK NOTIFICATION READ] Admin ${adminUser.email} marking notification ${id} as read`);
 
-    // Verify notification exists and belongs to this admin
     const existingNotification = await prisma.adminNotification.findFirst({
       where: {
         id: notificationId,
@@ -124,7 +113,6 @@ export const markNotificationRead = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
 
-    // If already read, just return current state
     if (existingNotification.isRead) {
       return res.json({
         success: true,
@@ -132,7 +120,7 @@ export const markNotificationRead = async (req: Request, res: Response) => {
       });
     }
 
-    // Mark as read
+    // Marcar como leída
     const now = new Date();
     await prisma.adminNotification.update({
       where: { id: notificationId },
@@ -157,10 +145,6 @@ export const markNotificationRead = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /admin/notifications/mark-all-read - Marcar todas las notificaciones no leídas como leídas
- * Acceso: Solo administradores
- */
 export const markAllNotificationsRead = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -175,7 +159,7 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
 
     const now = new Date();
     
-    // Update all unread notifications for this admin
+    // Actualiza solo  notificaciones no leídas
     const updateResult = await prisma.adminNotification.updateMany({
       where: {
         adminId: adminUser.id,
@@ -203,14 +187,6 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
   }
 };
 
-// ===============================
-// USER NOTIFICATIONS (for reservations and other user events)
-// ===============================
-
-/**
- * GET /notifications - Obtener todas las notificaciones del usuario autenticado
- * Acceso: Usuarios autenticados
- */
 export const getUserNotifications = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -223,10 +199,10 @@ export const getUserNotifications = async (req: Request, res: Response) => {
 
     console.log(`📬 [USER NOTIFICATIONS] User ${user.email} requesting notifications`);
 
-    // Get all notifications for this user with related reservation data
     const notifications = await prisma.userNotification.findMany({
       where: { userId: user.id },
       include: {
+        type: true,
         reservation: {
           include: {
             amenity: {
@@ -239,10 +215,9 @@ export const getUserNotifications = async (req: Request, res: Response) => {
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: 50 // Limit to last 50 notifications
+      take: 50
     });
 
-    // Count unread notifications
     const unreadCount = await prisma.userNotification.count({
       where: { 
         userId: user.id,
@@ -250,10 +225,9 @@ export const getUserNotifications = async (req: Request, res: Response) => {
       }
     });
 
-    // Format notifications
     const formattedNotifications = notifications.map(notification => ({
       id: notification.id.toString(),
-      type: notification.notificationType,
+      type: notification.type.name,
       title: notification.title,
       message: notification.message,
       isRead: notification.isRead,
@@ -283,10 +257,6 @@ export const getUserNotifications = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /notifications/:id/mark-read - Marcar una notificación específica como leída
- * Acceso: Usuarios autenticados
- */
 export const markUserNotificationRead = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -305,7 +275,6 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
     const notificationId = parseInt(id);
     console.log(`📖 [MARK USER NOTIFICATION READ] User ${user.email} marking notification ${id} as read`);
 
-    // Verify notification exists and belongs to this user
     const existingNotification = await prisma.userNotification.findFirst({
       where: {
         id: notificationId,
@@ -317,7 +286,6 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
 
-    // If already read, just return current state
     if (existingNotification.isRead) {
       return res.json({
         success: true,
@@ -325,7 +293,7 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
       });
     }
 
-    // Mark as read
+    // Marcar como leída
     const now = new Date();
     await prisma.userNotification.update({
       where: { id: notificationId },
@@ -350,10 +318,6 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /notifications/mark-all-read - Marcar todas las notificaciones no leídas como leídas
- * Acceso: Usuarios autenticados
- */
 export const markAllUserNotificationsRead = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -368,7 +332,6 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
 
     const now = new Date();
     
-    // Update all unread notifications for this user
     const updateResult = await prisma.userNotification.updateMany({
       where: {
         userId: user.id,
@@ -396,10 +359,6 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
   }
 };
 
-/**
- * DELETE /notifications/:id - Eliminar una notificación específica
- * Acceso: Usuarios autenticados
- */
 export const deleteUserNotification = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -418,7 +377,6 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
     const notificationId = parseInt(id);
     console.log(`🗑️ [DELETE USER NOTIFICATION] User ${user.email} deleting notification ${id}`);
 
-    // Verify notification exists and belongs to this user
     const existingNotification = await prisma.userNotification.findFirst({
       where: {
         id: notificationId,
@@ -430,7 +388,6 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Notificación no encontrada" });
     }
 
-    // Delete notification
     await prisma.userNotification.delete({
       where: { id: notificationId }
     });

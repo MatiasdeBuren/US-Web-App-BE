@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
 
 
-// Función helper para parsear parámetros de paginación
 const parsePaginationParams = (page?: string, limit?: string) => {
   const pageNum = parseInt(page || '1');
   const limitNum = parseInt(limit || '10');
@@ -10,7 +9,6 @@ const parsePaginationParams = (page?: string, limit?: string) => {
   return { pageNum, limitNum, skip };
 };
 
-// Función helper para construir filtros de búsqueda
 const buildClaimFilters = (category?: string, status?: string, search?: string, userId?: number) => {
   const where: any = {};
 
@@ -40,18 +38,16 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
   return where;
 };
 
-// Función helper para mapear claims con createdBy y adhesiones
 const mapClaimsWithCreatedBy = async (claims: any[], requestingUser?: any) => {
-  // Obtener adhesiones para todos los claims de una vez
+  
   const claimIds = claims.map(claim => claim.id);
   
-  // Obtener conteos de adhesiones para todos los claims
   const [supportCounts, disagreeCounts, userAdhesions] = await Promise.all([
     prisma.claimAdhesion.groupBy({
       by: ['claimId'],
       where: { 
         claimId: { in: claimIds },
-        adhesionType: 'support'
+        isSupport: true
       },
       _count: { id: true }
     }),
@@ -59,7 +55,7 @@ const mapClaimsWithCreatedBy = async (claims: any[], requestingUser?: any) => {
       by: ['claimId'],
       where: { 
         claimId: { in: claimIds },
-        adhesionType: 'disagree'
+        isSupport: false
       },
       _count: { id: true }
     }),
@@ -68,20 +64,19 @@ const mapClaimsWithCreatedBy = async (claims: any[], requestingUser?: any) => {
         claimId: { in: claimIds },
         userId: requestingUser.id
       },
-      select: { claimId: true, adhesionType: true }
+      select: { claimId: true, isSupport: true }
     }) : []
   ]);
 
-  // Crear maps para acceso rápido
   const supportMap = new Map(supportCounts.map(item => [item.claimId, item._count.id]));
   const disagreeMap = new Map(disagreeCounts.map(item => [item.claimId, item._count.id]));
-  const userAdhesionMap = new Map(userAdhesions.map(item => [item.claimId, item.adhesionType]));
+  const userAdhesionMap = new Map(userAdhesions.map(item => [item.claimId, item.isSupport]));
 
   return claims.map((claim: any) => {
-    // Determine createdBy based on anonymity and user role
+    
     let createdBy = claim.user.name;
     
-    // Show "Anónimo" if claim is anonymous AND user is not admin AND user is not the creator
+    // Es la parte donde se oculta el nombre si es anónimo
     if (claim.isAnonymous && 
         requestingUser?.role !== 'admin' && 
         requestingUser?.id !== claim.userId) {
@@ -100,15 +95,14 @@ const mapClaimsWithCreatedBy = async (claims: any[], requestingUser?: any) => {
   });
 };
 
-// Función helper para mapear un solo claim con createdBy y adhesiones
 const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
-  // Obtener conteos de adhesiones para este claim específico
+  
   const [supportCount, disagreeCount, userAdhesion] = await Promise.all([
     prisma.claimAdhesion.count({
-      where: { claimId: claim.id, adhesionType: 'support' }
+      where: { claimId: claim.id, isSupport: true }
     }),
     prisma.claimAdhesion.count({
-      where: { claimId: claim.id, adhesionType: 'disagree' }
+      where: { claimId: claim.id, isSupport: false }
     }),
     requestingUser ? prisma.claimAdhesion.findUnique({
       where: {
@@ -117,16 +111,14 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
           userId: requestingUser.id
         }
       },
-      select: { adhesionType: true }
+      select: { isSupport: true }
     }) : null
   ]);
 
-  // Determine createdBy based on anonymity and user role
   let createdBy = claim.user.name;
-  
-  // Show "Anónimo" if claim is anonymous AND user is not admin AND user is not the creator
-  if (claim.isAnonymous && 
-      requestingUser?.role !== 'admin' && 
+
+  if (claim.isAnonymous &&
+      requestingUser?.role !== 'admin' &&
       requestingUser?.id !== claim.userId) {
     createdBy = 'Anónimo';
   }
@@ -138,11 +130,10 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
       support: supportCount,
       disagree: disagreeCount
     },
-    user_adhesion: userAdhesion?.adhesionType || null
+    user_adhesion: userAdhesion?.isSupport ?? null
   };
 };
 
-// Función helper para obtener claims con paginación
 const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUser?: any) => {
   try {
     console.log('🔍 [GET CLAIMS PAGINATION] Starting query with params:', { skip, limitNum, where: JSON.stringify(where) });
@@ -177,7 +168,6 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
   }
 };
 
-// Database-driven validation functions
 const validateCategory = async (category: string) => {
   const categoryRecord = await prisma.claimCategory.findUnique({
     where: { name: category }
@@ -211,7 +201,6 @@ const validateStatus = async (status: string) => {
   return statusRecord;
 };
 
-// Función helper para verificar permisos de admin
 const checkAdminPermissions = (user: any, res: Response) => {
   if (!user || user.role !== 'admin') {
     res.status(403).json({ 
@@ -222,11 +211,8 @@ const checkAdminPermissions = (user: any, res: Response) => {
   return true;
 };
 
-// ===============================
-// LOOKUP TABLE ENDPOINTS
-// ===============================
 
-// GET /claims/categories - Obtener todas las categorías
+// GET /claims/categories 
 export const getClaimCategories = async (req: Request, res: Response) => {
   try {
     const categories = await prisma.claimCategory.findMany({
@@ -239,7 +225,7 @@ export const getClaimCategories = async (req: Request, res: Response) => {
   }
 };
 
-// GET /claims/priorities - Obtener todas las prioridades
+// GET /claims/priorities 
 export const getClaimPriorities = async (req: Request, res: Response) => {
   try {
     const priorities = await prisma.claimPriority.findMany({
@@ -252,7 +238,7 @@ export const getClaimPriorities = async (req: Request, res: Response) => {
   }
 };
 
-// GET /claims/statuses - Obtener todos los estados
+// GET /claims/statuses 
 export const getClaimStatuses = async (req: Request, res: Response) => {
   try {
     const statuses = await prisma.claimStatus.findMany({
@@ -265,27 +251,8 @@ export const getClaimStatuses = async (req: Request, res: Response) => {
   }
 };
 
-// ===============================
-// CONTROLLER FUNCTIONS
-// ===============================
 
-// GET /claims/public - Obtener todos los reclamos públicos (sin autenticación)
-export const getPublicClaims = async (req: Request, res: Response) => {
-  try {
-    const { page, limit, category, status, search } = req.query;
-    const { pageNum, limitNum, skip } = parsePaginationParams(page as string, limit as string);
-    
-    const where = buildClaimFilters(category as string, status as string, search as string);
-    const { claims, total } = await getClaimsWithPagination(where, skip, limitNum);
-
-    res.json({ claims, total, page: pageNum, limit: limitNum });
-  } catch (error) {
-    console.error('Error al obtener reclamos públicos:', error);
-    res.status(500).json({ message: "Error interno del servidor" });
-  }
-};
-
-// GET /claims - Obtener todos los reclamos del usuario
+// GET /claims/categories 
 export const getUserClaims = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -309,7 +276,7 @@ export const getUserClaims = async (req: Request, res: Response) => {
   }
 };
 
-// GET /claims/:id - Obtener un reclamo específico
+// GET /claims/:id 
 export const getClaim = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -348,7 +315,7 @@ export const getClaim = async (req: Request, res: Response) => {
   }
 };
 
-// POST /claims - Crear un nuevo reclamo
+// POST /claims 
 export const createClaim = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -358,24 +325,20 @@ export const createClaim = async (req: Request, res: Response) => {
 
     const { subject, category, description, location, priority, isAnonymous } = req.body;
 
-    // Validar campos requeridos
     if (!subject || !category || !description || !location || !priority) {
       return res.status(400).json({ 
         message: "Todos los campos son obligatorios: subject, category, description, location, priority" 
       });
     }
 
-    // Validate and get records from database
     try {
       const [categoryRecord, priorityRecord, statusRecord] = await Promise.all([
         validateCategory(category),
         validatePriority(priority),
-        validateStatus('pendiente') // Default status for new claims
+        validateStatus('pendiente') 
       ]);
 
-      // Use transaction to create claim and notifications atomically
       const result = await prisma.$transaction(async (tx) => {
-        // Create the claim
         const claim = await tx.claim.create({
           data: {
             subject,
@@ -397,25 +360,29 @@ export const createClaim = async (req: Request, res: Response) => {
           }
         });
 
-        // Get all admin users
         const adminUsers = await tx.user.findMany({
           where: { role: 'admin' },
           select: { id: true }
         });
 
-        // Determine notification type based on priority
-        // High priority or urgent claims get 'urgent_claim' type
-        const notificationType = (priorityRecord.name === 'alta' || priorityRecord.name === 'urgente') 
-          ? 'urgent_claim' 
-          : 'new_claim';
+        const notificationTypeName = (priorityRecord.name === 'alta' || priorityRecord.name === 'urgente') 
+          ? 'reclamo_urgente' 
+          : 'nuevo_reclamo';
 
-        // Create notifications for all admins
+        const notificationType = await tx.adminNotificationType.findUnique({
+          where: { name: notificationTypeName }
+        });
+
+        if (!notificationType) {
+          throw new Error(`Tipo de notificación no encontrado: ${notificationTypeName}`);
+        }
+
         if (adminUsers.length > 0) {
           await tx.adminNotification.createMany({
             data: adminUsers.map(admin => ({
               adminId: admin.id,
               claimId: claim.id,
-              notificationType
+              typeId: notificationType.id
             }))
           });
         }
@@ -435,7 +402,7 @@ export const createClaim = async (req: Request, res: Response) => {
   }
 };
 
-// PUT /claims/:id - Actualizar un reclamo
+// PUT /claims/:id 
 export const updateClaim = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -449,7 +416,6 @@ export const updateClaim = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID del reclamo es requerido" });
     }
 
-    // Verificar que el reclamo existe, pertenece al usuario y obtener status
     const claimWithStatus = await prisma.claim.findFirst({
       where: {
         id: parseInt(id),
@@ -471,7 +437,6 @@ export const updateClaim = async (req: Request, res: Response) => {
 
     const { subject, category, description, location, priority, status } = req.body;
 
-    // Los usuarios solo pueden cambiar el estado a 'pendiente'
     if (status && status !== 'pendiente') {
       return res.status(403).json({ 
         message: "Los usuarios solo pueden cambiar el estado a 'pendiente'" 
@@ -479,14 +444,12 @@ export const updateClaim = async (req: Request, res: Response) => {
     }
 
     try {
-      // Validate and get IDs from database if values are provided
       const [categoryRecord, priorityRecord, statusRecord] = await Promise.all([
         category ? validateCategory(category) : Promise.resolve(null),
         priority ? validatePriority(priority) : Promise.resolve(null),
         status ? validateStatus(status) : Promise.resolve(null)
       ]);
 
-      // Prepare update data
       const updateData: any = {};
       if (subject) updateData.subject = subject;
       if (description) updateData.description = description;
@@ -520,7 +483,7 @@ export const updateClaim = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /claims/:id - Eliminar un reclamo
+// DELETE /claims/:id 
 export const deleteClaim = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
@@ -534,7 +497,6 @@ export const deleteClaim = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID del reclamo es requerido" });
     }
 
-    // Verificar que el reclamo existe, pertenece al usuario y obtener status
     const claimWithStatusForDelete = await prisma.claim.findFirst({
       where: {
         id: parseInt(id),
@@ -566,40 +528,36 @@ export const deleteClaim = async (req: Request, res: Response) => {
   }
 };
 
-// ===============================
-// FUNCIONES DE ADMINISTRADOR
-// ===============================
-
-// GET /admin/claims - Obtener todos los reclamos (solo admin)
+// GET /admin/claims 
 export const getAdminClaims = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     if (!checkAdminPermissions(user, res)) return;
 
-    console.log('🔍 [GET ADMIN CLAIMS] Request query params:', req.query);
+    console.log('[GET ADMIN CLAIMS] Request query params:', req.query);
     const { page, limit, category, status, search, userId } = req.query;
     const { pageNum, limitNum, skip } = parsePaginationParams(page as string, limit as string);
     
     const userIdFilter = userId ? parseInt(userId as string) : undefined;
     const where = buildClaimFilters(category as string, status as string, search as string, userIdFilter);
     
-    console.log('🔍 [GET ADMIN CLAIMS] Calling getClaimsWithPagination...');
+    console.log('[GET ADMIN CLAIMS] Calling getClaimsWithPagination...');
     const { claims, total } = await getClaimsWithPagination(where, skip, limitNum);
 
-    console.log(`✅ [GET ADMIN CLAIMS] Successfully retrieved ${claims.length} claims, total: ${total}`);
+    console.log(`[GET ADMIN CLAIMS] Successfully retrieved ${claims.length} claims, total: ${total}`);
     res.json({ claims, total, page: pageNum, limit: limitNum });
 
   } catch (error) {
-    console.error('❌ [GET ADMIN CLAIMS ERROR] Full error details:', error);
+    console.error('[GET ADMIN CLAIMS ERROR] Full error details:', error);
     if (error instanceof Error) {
-      console.error('❌ [GET ADMIN CLAIMS ERROR] Error message:', error.message);
-      console.error('❌ [GET ADMIN CLAIMS ERROR] Error stack:', error.stack);
+      console.error('[GET ADMIN CLAIMS ERROR] Error message:', error.message);
+      console.error('[GET ADMIN CLAIMS ERROR] Error stack:', error.stack);
     }
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
-// PUT /admin/claims/:id/status - Actualizar estado de reclamo (solo admin)
+// PUT /admin/claims/:id/status 
 export const updateClaimStatus = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -617,10 +575,8 @@ export const updateClaimStatus = async (req: Request, res: Response) => {
     }
 
     try {
-      // Validate status and get record from database
       const statusRecord = await validateStatus(status);
 
-      // Verificar que el reclamo existe
       const existingClaim = await prisma.claim.findUnique({
         where: { id: parseInt(id) }
       });
@@ -657,7 +613,7 @@ export const updateClaimStatus = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /admin/claims/:id - Eliminar cualquier reclamo (solo admin)
+// DELETE /admin/claims/:id 
 export const deleteAdminClaim = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -669,7 +625,6 @@ export const deleteAdminClaim = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID del reclamo es requerido" });
     }
 
-    // Verificar que el reclamo existe
     const existingClaim = await prisma.claim.findUnique({
       where: { id: parseInt(id) }
     });

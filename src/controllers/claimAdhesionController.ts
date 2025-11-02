@@ -1,10 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 
-/**
- * GET /claims/:id/adhesions - Obtener adhesiones de un claim específico
- * Acceso: Usuarios autenticados
- */
+// GET /claims/:id/adhesions 
 export const getClaimAdhesions = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -19,7 +16,6 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID de claim inválido" });
     }
 
-    // Verificar que el claim existe
     const claim = await prisma.claim.findUnique({
       where: { id: claimId },
       select: { id: true, subject: true }
@@ -29,13 +25,12 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Claim no encontrado" });
     }
 
-    // Obtener conteos de adhesiones
     const [supportCount, disagreeCount, userAdhesion] = await Promise.all([
       prisma.claimAdhesion.count({
-        where: { claimId, adhesionType: "support" }
+        where: { claimId, isSupport: true }
       }),
       prisma.claimAdhesion.count({
-        where: { claimId, adhesionType: "disagree" }
+        where: { claimId, isSupport: false }
       }),
       prisma.claimAdhesion.findUnique({
         where: {
@@ -44,29 +39,26 @@ export const getClaimAdhesions = async (req: Request, res: Response) => {
             userId
           }
         },
-        select: { adhesionType: true }
+        select: { isSupport: true }
       })
     ]);
 
-    console.log(`📊 [CLAIM ADHESIONS] Claim ${claimId}: Support=${supportCount}, Disagree=${disagreeCount}, User=${userAdhesion?.adhesionType || 'none'}`);
+    console.log(`[CLAIM ADHESIONS] Claim ${claimId}: Support=${supportCount}, Disagree=${disagreeCount}, User=${userAdhesion?.isSupport !== undefined ? (userAdhesion.isSupport ? 'support' : 'disagree') : 'none'}`);
 
     res.json({
       total_support: supportCount,
       total_disagree: disagreeCount,
-      user_adhesion: userAdhesion?.adhesionType || null
+      user_adhesion: userAdhesion?.isSupport
     });
 
   } catch (error) {
-    console.error("❌ [GET CLAIM ADHESIONS ERROR]", error);
+    console.error("[GET CLAIM ADHESIONS ERROR]", error);
     res.status(500).json({ message: "Error al obtener adhesiones del claim" });
   }
 };
 
-/**
- * POST /claims/:id/adhesions - Crear o actualizar adhesión a un claim
- * Acceso: Usuarios autenticados
- * Body: { adhesion_type: "support" | "disagree" }
- */
+
+
 export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -83,14 +75,12 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
       return res.status(400).json({ message: "ID de claim inválido" });
     }
 
-    // Validar adhesion_type
-    if (!adhesion_type || !["support", "disagree"].includes(adhesion_type)) {
+    if (adhesion_type === undefined || typeof adhesion_type !== 'boolean') {
       return res.status(400).json({ 
-        message: "adhesion_type debe ser 'support' o 'disagree'" 
+        message: "adhesion_type debe ser un booleano: true (de acuerdo) o false (en desacuerdo)" 
       });
     }
 
-    // Verificar que el claim existe y obtener info del creador
     const claim = await prisma.claim.findUnique({
       where: { id: claimId },
       select: { id: true, subject: true, userId: true }
@@ -100,15 +90,14 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
       return res.status(404).json({ message: "Claim no encontrado" });
     }
 
-    // REGLA DE NEGOCIO: El creador del claim NO puede adherirse a su propio reclamo
+    //El creador del claim no puede adherirse a su propio reclamo
     if (claim.userId === userId) {
-      console.log(`🚨 [CLAIM ADHESION] User ${userEmail} tried to adhere to their own claim ${claimId}`);
+      console.log(`[CLAIM ADHESION] User ${userEmail} tried to adhere to their own claim ${claimId}`);
       return res.status(403).json({ 
         message: "No puedes adherirte a tu propio reclamo" 
       });
     }
 
-    // Crear o actualizar adhesión usando upsert
     const adhesion = await prisma.claimAdhesion.upsert({
       where: {
         unique_user_claim_adhesion: {
@@ -117,19 +106,20 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
         }
       },
       update: {
-        adhesionType: adhesion_type,
+        isSupport: adhesion_type,
         updatedAt: new Date()
       },
       create: {
         claimId,
         userId,
-        adhesionType: adhesion_type
+        isSupport: adhesion_type
       }
     });
 
     const action = adhesion.createdAt.getTime() === adhesion.updatedAt.getTime() ? "creada" : "actualizada";
+    const adhesionTypeStr = adhesion_type ? 'support' : 'disagree';
     
-    console.log(`✅ [CLAIM ADHESION] User ${userEmail} ${action} adhesión '${adhesion_type}' to claim ${claimId}`);
+    console.log(`[CLAIM ADHESION] User ${userEmail} ${action} adhesión '${adhesionTypeStr}' to claim ${claimId}`);
 
     res.status(200).json({
       message: `Adhesión ${action}`,
@@ -137,15 +127,11 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
     });
 
   } catch (error) {
-    console.error("❌ [CREATE CLAIM ADHESION ERROR]", error);
+    console.error("[CREATE CLAIM ADHESION ERROR]", error);
     res.status(500).json({ message: "Error al registrar adhesión" });
   }
 };
 
-/**
- * DELETE /claims/:id/adhesions - Eliminar adhesión de un claim
- * Acceso: Usuarios autenticados
- */
 export const deleteClaimAdhesion = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -161,7 +147,6 @@ export const deleteClaimAdhesion = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "ID de claim inválido" });
     }
 
-    // Verificar que el claim existe
     const claim = await prisma.claim.findUnique({
       where: { id: claimId },
       select: { id: true, subject: true }
@@ -171,7 +156,6 @@ export const deleteClaimAdhesion = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Claim no encontrado" });
     }
 
-    // Verificar que existe una adhesión del usuario
     const existingAdhesion = await prisma.claimAdhesion.findUnique({
       where: {
         unique_user_claim_adhesion: {
@@ -185,7 +169,6 @@ export const deleteClaimAdhesion = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "No tienes adhesión registrada para este claim" });
     }
 
-    // Eliminar la adhesión
     await prisma.claimAdhesion.delete({
       where: {
         unique_user_claim_adhesion: {
@@ -195,14 +178,14 @@ export const deleteClaimAdhesion = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`🗑️ [CLAIM ADHESION] User ${userEmail} removed adhesion from claim ${claimId}`);
+    console.log(`[CLAIM ADHESION] User ${userEmail} removed adhesion from claim ${claimId}`);
 
     res.status(200).json({
       message: "Adhesión eliminada"
     });
 
   } catch (error) {
-    console.error("❌ [DELETE CLAIM ADHESION ERROR]", error);
+    console.error("[DELETE CLAIM ADHESION ERROR]", error);
     res.status(500).json({ message: "Error al eliminar adhesión" });
   }
 };

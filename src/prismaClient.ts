@@ -1,11 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
-// Create a single instance with optimized settings
 export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 });
 
-// Graceful shutdown handling
 const gracefulShutdown = async () => {
   console.log('Shutting down gracefully...');
   await prisma.$disconnect();

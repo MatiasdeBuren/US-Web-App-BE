@@ -3,15 +3,10 @@ import { prisma } from "../prismaClient";
 import { wouldBeLastAdmin } from "../middleware/adminMiddleware";
 import { emailService } from "../services/emailService";
 
-/**
- * GET /admin/stats - Estadísticas generales del sistema
- * Acceso: Solo administradores
- */
 export const getSystemStats = async (req: Request, res: Response) => {
   try {
     console.log(`📊 [ADMIN STATS] User ${(req as any).user.email} requesting system stats`);
 
-    // Consultas paralelas para mejor rendimiento
     const [
       totalUsers,
       totalApartments,
@@ -26,7 +21,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
         where: {
           status: { name: "confirmada" },
           endTime: {
-            gte: new Date() // Reservas que aún no han terminado
+            gte: new Date() // Reservas que no terminaron
           }
         }
       }),
@@ -53,10 +48,6 @@ export const getSystemStats = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/users - Listar todos los usuarios con información completa
- * Acceso: Solo administradores
- */
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     console.log(`👥 [ADMIN USERS] User ${(req as any).user.email} requesting all users`);
@@ -121,11 +112,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/users/:id/role - Cambiar role de un usuario
- * Acceso: Solo administradores
- * Protección: No permite eliminar el último admin
- */
 export const updateUserRole = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -161,7 +147,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       });
     }
 
-    // PROTECCIÓN CRÍTICA: No permitir eliminar el último admin
+    // No se puede eliminar el último admin 
     if (targetUser.role === "admin" && role !== "admin") {
       const isLastAdmin = await wouldBeLastAdmin(userId);
       if (isLastAdmin) {
@@ -172,7 +158,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       }
     }
 
-    // Actualizar el role
+    // Actualizar el rol
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { role },
@@ -202,10 +188,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/reservations - Obtener todas las reservas del sistema
- * Acceso: Solo administradores
- */
+
 export const getAllReservations = async (req: Request, res: Response) => {
   try {
     const { status, amenityId, limit = "50" } = req.query;
@@ -272,10 +255,7 @@ export const getAllReservations = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /admin/amenities - Crear nuevo amenity
- * Acceso: Solo administradores
- */
+
 export const createAmenity = async (req: Request, res: Response) => {
   try {
     const { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval } = req.body;
@@ -302,7 +282,7 @@ export const createAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Validaciones opcionales para horarios
+    // Validaciones de horarios
     if (openTime !== undefined && openTime !== null) {
       if (typeof openTime !== "string" || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(openTime)) {
         return res.status(400).json({ 
@@ -349,7 +329,6 @@ export const createAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Preparar datos para crear
     const createData: any = {
       name: name.trim(),
       capacity,
@@ -395,10 +374,6 @@ export const createAmenity = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/amenities/:id - Actualizar amenity existente
- * Acceso: Solo administradores
- */
 export const updateAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -414,7 +389,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que el amenity existe
     const existingAmenity = await prisma.amenity.findUnique({
       where: { id: amenityId }
     });
@@ -425,7 +399,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Preparar datos de actualización
     const updateData: any = {};
 
     if (name !== undefined) {
@@ -526,7 +499,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
       }
     }
 
-    // Actualizar amenity
     const updatedAmenity = await prisma.amenity.update({
       where: { id: amenityId },
       data: updateData
@@ -550,14 +522,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
   }
 };
 
-// ======================================================================
-// 🏢 GESTIÓN DE APARTAMENTOS 
-// ======================================================================
-
-/**
- * GET /admin/apartments - Obtener todos los apartamentos con información completa
- * Acceso: Solo administradores
- */
 export const getAllApartments = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -631,10 +595,7 @@ export const getAllApartments = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * POST /admin/apartments - Crear nuevo apartamento
- * Acceso: Solo administradores
- */
+
 export const createApartment = async (req: Request, res: Response) => {
   try {
     const { unit, floor, rooms, areaM2, observations, ownerId } = req.body;
@@ -642,7 +603,6 @@ export const createApartment = async (req: Request, res: Response) => {
 
     console.log(`➕ [ADMIN CREATE APARTMENT] User ${adminUser.email} creating apartment:`, { unit, floor, rooms, ownerId });
 
-    // Validaciones obligatorias
     if (!unit || typeof unit !== "string" || unit.trim().length === 0) {
       return res.status(400).json({ 
         message: "El unit es obligatorio y debe ser una cadena no vacía" 
@@ -661,7 +621,6 @@ export const createApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Validar que el unit sea único
     const existingApartment = await prisma.apartment.findFirst({
       where: {
         unit: {
@@ -677,7 +636,6 @@ export const createApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Validar owner si se proporciona
     if (ownerId) {
       if (typeof ownerId !== "number") {
         return res.status(400).json({ 
@@ -703,7 +661,6 @@ export const createApartment = async (req: Request, res: Response) => {
       }
     }
 
-    // Preparar datos para crear
     const createData: any = {
       unit: unit.trim(),
       floor,
@@ -758,10 +715,7 @@ export const createApartment = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/apartments/:id - Actualizar apartamento existente
- * Acceso: Solo administradores
- */
+
 export const updateApartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -777,7 +731,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que el apartamento existe
     const existingApartment = await prisma.apartment.findUnique({
       where: { id: apartmentId },
       include: {
@@ -792,11 +745,9 @@ export const updateApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Preparar datos de actualización
     const updateData: any = {};
     const updatedFields: string[] = [];
 
-    // Validar y actualizar unit
     if (unit !== undefined) {
       if (typeof unit !== "string" || unit.trim().length === 0) {
         return res.status(400).json({ 
@@ -954,7 +905,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       }
     }
 
-    // Actualizar apartamento si hay cambios
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ 
         message: "No fields to update" 
@@ -1006,11 +956,6 @@ export const updateApartment = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/apartments/:id - Eliminar apartamento
- * Acceso: Solo administradores
- * Validaciones: Verificar dependencias antes de eliminar
- */
 export const deleteApartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1064,7 +1009,6 @@ export const deleteApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar si tiene reservas (por parte de inquilinos del apartamento)
     const activeReservations = await prisma.reservation.count({
       where: {
         user: {
@@ -1113,14 +1057,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
   }
 };
 
-// ======================================================================
-// 🏊 GESTIÓN DE AMENITIES COMPLETA - FUNCIONES NUEVAS Y ACTUALIZADAS
-// ======================================================================
 
-/**
- * GET /admin/amenities - Obtener todos los amenities con conteos de reservas
- * Acceso: Solo administradores
- */
 export const getAllAmenities = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -1139,7 +1076,6 @@ export const getAllAmenities = async (req: Request, res: Response) => {
       ]
     });
 
-    // Obtener conteo de reservas activas para cada amenity
     const amenitiesWithCounts = await Promise.all(
       amenities.map(async (amenity) => {
         const activeReservations = await prisma.reservation.count({
@@ -1185,11 +1121,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/amenities/:id - Eliminar amenity
- * Acceso: Solo administradores
- * Eliminación en cascada: Elimina todas las reservas relacionadas
- */
+
 export const deleteAmenity = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1204,7 +1136,6 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que el amenity existe
     const amenity = await prisma.amenity.findUnique({
       where: { id: amenityId },
       select: {
@@ -1221,14 +1152,14 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // Contar todas las reservas relacionadas (activas e históricas)
+    // (activas e históricas)
     const allReservations = await prisma.reservation.count({
       where: {
         amenityId: amenityId
       }
     });
 
-    // Contar solo las reservas activas para información
+    // Contar solo las reservas activas
     const activeReservations = await prisma.reservation.count({
       where: {
         amenityId: amenityId,
@@ -1243,9 +1174,8 @@ export const deleteAmenity = async (req: Request, res: Response) => {
 
     console.log(`� [ADMIN DELETE AMENITY] Amenity ${amenity.name}: ${allReservations} total reservations, ${activeReservations} active`);
 
-    // Proceder con la eliminación en cascada usando una transacción
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Eliminar todas las reservas relacionadas
+      
       const deletedReservations = await tx.reservation.deleteMany({
         where: {
           amenityId: amenityId
@@ -1254,7 +1184,6 @@ export const deleteAmenity = async (req: Request, res: Response) => {
 
       console.log(`🗑️ [ADMIN DELETE AMENITY] Deleted ${deletedReservations.count} reservations for amenity ${amenity.name}`);
 
-      // 2. Eliminar el amenity
       const deletedAmenity = await tx.amenity.delete({
         where: { id: amenityId }
       });
@@ -1283,289 +1212,86 @@ export const deleteAmenity = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/amenities/:id/reservations - Obtener todas las reservas de un amenity específico
- * Acceso: Solo administradores
- */
 export const getAmenityDetailReservations = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status, limit = "50" } = req.query;
-    const adminUser = (req as any).user;
-
-    console.log(`📋 [ADMIN AMENITY RESERVATIONS] User ${adminUser.email} requesting reservations for amenity ${id}. Filters:`, { status, limit });
 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
-      return res.status(400).json({ 
-        message: "ID de amenity inválido" 
-      });
+      return res.status(400).json({ message: "ID de amenity inválido" });
     }
 
-    // Verificar que el amenity existe
     const amenity = await prisma.amenity.findUnique({
       where: { id: amenityId },
-      select: {
-        id: true,
-        name: true,
-        capacity: true,
-        maxDuration: true
-      }
+      select: { id: true, name: true, capacity: true, maxDuration: true }
     });
 
     if (!amenity) {
-      return res.status(404).json({ 
-        message: "Amenity no encontrado" 
-      });
+      return res.status(404).json({ message: "Amenity no encontrado" });
     }
 
-    // Construir filtros para las reservas
-    const where: any = {
-      amenityId: amenityId
-    };
+    const where: any = { amenityId };
 
-    // Filtrar por status si se proporciona
-    if (status && typeof status === "string") {
-      const validStatuses = ["active", "confirmada", "pendiente", "cancelada", "finalizada"];
-      
-      if (status === "active") {
-        // Reservas activas = confirmadas y que aún no han terminado
-        where.status = { name: "confirmada" };
-        where.endTime = {
-          gte: new Date()
-        };
-      } else if (status === "finalizada") {
-        // Reservas finalizadas
-        where.status = { name: "finalizada" };
-      } else if (validStatuses.includes(status)) {
-        // Map frontend status names to database status names
-        const statusMap: { [key: string]: string } = {
-          "confirmada": "confirmada",
-          "pendiente": "pendiente", 
-          "cancelada": "cancelada",
-          "finalizada": "finalizada"
-        };
-        const dbStatus = statusMap[status];
-        if (dbStatus) {
-          where.status = { name: dbStatus };
-        }
-      }
+    if (status === "active") {
+      where.status = { name: "confirmada" };
+      where.endTime = { gte: new Date() };
+    } else if (status) {
+      where.status = { name: status };
     }
 
-    const limitNum = parseInt(limit as string) || 50;
-    const maxLimit = Math.min(limitNum, 200); // Máximo 200 para evitar sobrecarga
+    const maxLimit = Math.min(parseInt(limit as string) || 50, 200);
 
-    // Obtener las reservas
-    const reservations = await prisma.reservation.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            apartment: {
-              select: {
-                unit: true,
-                floor: true
-              }
+    const [reservations, totalCount] = await Promise.all([
+      prisma.reservation.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              apartment: { select: { unit: true, floor: true } }
             }
-          }
+          },
+          status: true
         },
-        status: true
-      },
-      orderBy: { startTime: "desc" },
-      take: maxLimit
-    });
+        orderBy: { startTime: "desc" },
+        take: maxLimit
+      }),
+      prisma.reservation.count({ where })
+    ]);
 
-    // Obtener conteo total (sin límite)
-    const totalCount = await prisma.reservation.count({ where });
-
-    // Formatear las reservas
-    const formattedReservations = reservations.map(reservation => ({
-      id: reservation.id,
-      startTime: reservation.startTime,
-      endTime: reservation.endTime,
-      status: reservation.status.name,
-      createdAt: reservation.createdAt,
+    const formattedReservations = reservations.map(r => ({
+      id: r.id,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      status: r.status.name,
+      createdAt: r.createdAt,
       user: {
-        id: reservation.user.id,
-        name: reservation.user.name,
-        email: reservation.user.email,
-        apartment: reservation.user.apartment ? {
-          unit: reservation.user.apartment.unit,
-          floor: reservation.user.apartment.floor
-        } : null
+        id: r.user.id,
+        name: r.user.name,
+        email: r.user.email,
+        apartment: r.user.apartment
       }
     }));
 
-    console.log(`✅ [ADMIN AMENITY RESERVATIONS] Retrieved ${formattedReservations.length} reservations for amenity ${amenity.name}`);
+    console.log(`✅ [ADMIN] Retrieved ${formattedReservations.length} reservations for ${amenity.name}`);
 
     res.json({
       reservations: formattedReservations,
       amenityName: amenity.name,
       amenityId: amenity.id,
       totalCount,
-      filters: { status, limit: maxLimit },
-      retrievedAt: new Date().toISOString()
+      filters: { status, limit: maxLimit }
     });
 
   } catch (error) {
     console.error("❌ [ADMIN AMENITY RESERVATIONS ERROR]", error);
-    res.status(500).json({ 
-      message: "Error al obtener las reservas del amenity" 
-    });
+    res.status(500).json({ message: "Error al obtener las reservas del amenity" });
   }
 };
 
-/**
- * DELETE /admin/users/:id - Eliminar usuario (solo admin)
- * Acceso: Solo administradores
- */
-export const deleteUserAdmin = async (req: Request, res: Response) => {
-  try {
-    const adminUser = (req as any).user;
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ message: "ID del usuario es requerido" });
-    }
-
-    const userId = parseInt(id);
-    console.log(`🗑️ [ADMIN DELETE USER] Admin ${adminUser.email} attempting to delete user ${id}`);
-
-    // Verificar que el usuario a eliminar existe
-    const userToDelete = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        ownedApartments: {
-          include: {
-            tenants: true
-          }
-        },
-        claims: true,
-        reservations: true,
-        claimAdhesions: true
-      }
-    });
-
-    if (!userToDelete) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    // Prevenir que un admin se elimine a sí mismo
-    if (userToDelete.id === adminUser.id) {
-      return res.status(403).json({ 
-        message: "No puedes eliminar tu propia cuenta de administrador" 
-      });
-    }
-
-    // Prevenir eliminar el último admin
-    if (userToDelete.role === 'admin') {
-      const isLastAdmin = await wouldBeLastAdmin(userId);
-      if (isLastAdmin) {
-        return res.status(409).json({
-          message: "No se puede eliminar: es el último administrador del sistema",
-          error: "LAST_ADMIN"
-        });
-      }
-    }
-
-    // Si el usuario tiene apartamentos como propietario, transferir o verificar
-    if (userToDelete.ownedApartments && userToDelete.ownedApartments.length > 0) {
-      // Verificar si algún apartamento tiene inquilinos
-      const apartmentsWithTenants = userToDelete.ownedApartments.filter(apt => apt.tenants.length > 0);
-      
-      if (apartmentsWithTenants.length > 0) {
-        return res.status(409).json({
-          message: "No se puede eliminar: el usuario es propietario de departamentos con inquilinos asignados",
-          error: "USER_OWNS_APARTMENTS_WITH_TENANTS",
-          details: {
-            apartmentsCount: userToDelete.ownedApartments.length,
-            apartmentsWithTenants: apartmentsWithTenants.length
-          }
-        });
-      }
-    }
-
-    // Usar transacción para eliminar todo de manera segura
-    const deletionResult = await prisma.$transaction(async (tx) => {
-      // 1. Eliminar adhesiones a claims
-      const deletedAdhesions = await tx.claimAdhesion.deleteMany({
-        where: { userId: userId }
-      });
-
-      // 2. Eliminar claims del usuario (esto también eliminará adhesiones relacionadas)
-      const deletedClaims = await tx.claim.deleteMany({
-        where: { userId: userId }
-      });
-
-      // 3. Eliminar reservaciones del usuario
-      const deletedReservations = await tx.reservation.deleteMany({
-        where: { userId: userId }
-      });
-
-      // 4. Eliminar apartamentos si es propietario y no tienen inquilinos
-      const deletedApartments = await tx.apartment.deleteMany({
-        where: { ownerId: userId }
-      });
-
-      // 5. Finalmente eliminar el usuario
-      const deletedUser = await tx.user.delete({
-        where: { id: userId }
-      });
-
-      return {
-        user: deletedUser,
-        deletedClaims: deletedClaims.count,
-        deletedAdhesions: deletedAdhesions.count,
-        deletedReservations: deletedReservations.count,
-        deletedApartments: deletedApartments.count
-      };
-    });
-
-    console.log(`✅ [ADMIN DELETE USER] User ${userToDelete.email} successfully deleted by admin ${adminUser.email}`);
-    console.log(`📊 [ADMIN DELETE USER] Deletion summary:`, {
-      claims: deletionResult.deletedClaims,
-      adhesions: deletionResult.deletedAdhesions,
-      reservations: deletionResult.deletedReservations,
-      apartments: deletionResult.deletedApartments
-    });
-
-    res.json({
-      message: "Usuario eliminado exitosamente",
-      deletedUser: {
-        id: userToDelete.id,
-        name: userToDelete.name,
-        email: userToDelete.email,
-        role: userToDelete.role
-      },
-      deletionSummary: {
-        claims: deletionResult.deletedClaims,
-        adhesions: deletionResult.deletedAdhesions,
-        reservations: deletionResult.deletedReservations,
-        apartments: deletionResult.deletedApartments
-      },
-      deletedBy: adminUser.email,
-      deletedAt: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error("❌ [ADMIN DELETE USER ERROR]", error);
-    res.status(500).json({ 
-      message: "Error al eliminar usuario" 
-    });
-  }
-};
-
-// ======================================================================
-// 📋 GESTIÓN DE RESERVAS PENDIENTES - APROBAR/RECHAZAR
-// ======================================================================
-
-/**
- * PUT /admin/reservations/:id/approve - Aprobar una reserva pendiente
- * Acceso: Solo administradores
- */
 export const approveReservation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1580,7 +1306,6 @@ export const approveReservation = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva existe
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
       include: {
@@ -1600,7 +1325,6 @@ export const approveReservation = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva esté pendiente
     if (reservation.status.name !== "pendiente") {
       return res.status(400).json({ 
         message: `No se puede aprobar una reserva con estado: ${reservation.status.label}` 
@@ -1633,18 +1357,22 @@ export const approveReservation = async (req: Request, res: Response) => {
         });
 
         // Crear notificación para el usuario
+        const cancelledType = await tx.userNotificationType.findUnique({
+          where: { name: 'reservation_cancelled' }
+        });
+        
         await tx.userNotification.create({
           data: {
             userId: reservation.user.id,
             reservationId: reservationId,
-            notificationType: 'reservation_cancelled',
+            typeId: cancelledType!.id,
             title: 'Reserva Rechazada Automáticamente',
             message: `Tu reserva para ${reservation.amenity.name} fue rechazada porque otras reservas llenaron la capacidad disponible mientras tu solicitud estaba pendiente.`
           }
         });
       });
 
-      // Enviar email de rechazo automático
+      // email de rechazo automático
       emailService.sendReservationCancellationEmail(
         reservation.user.email,
         reservation.user.name,
@@ -1661,9 +1389,8 @@ export const approveReservation = async (req: Request, res: Response) => {
       });
     }
 
-    // Aprobar la reserva con transacción
     const approvedReservation = await prisma.$transaction(async (tx) => {
-      // Actualizar status a confirmada
+     
       const updated = await tx.reservation.update({
         where: { id: reservationId },
         data: { 
@@ -1678,12 +1405,15 @@ export const approveReservation = async (req: Request, res: Response) => {
         }
       });
 
-      // Crear notificación para el usuario
+      const confirmedType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_confirmed' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_confirmed',
+          typeId: confirmedType!.id,
           title: 'Reserva Aprobada',
           message: `Tu reserva para ${reservation.amenity.name} ha sido aprobada por un administrador.`
         }
@@ -1692,7 +1422,7 @@ export const approveReservation = async (req: Request, res: Response) => {
       return updated;
     });
 
-    // Enviar email de confirmación
+    // email de confirmación
     emailService.sendReservationConfirmationEmail(
       reservation.user.email,
       reservation.user.name,
@@ -1718,10 +1448,6 @@ export const approveReservation = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * PUT /admin/reservations/:id/reject - Rechazar una reserva pendiente
- * Acceso: Solo administradores
- */
 export const rejectReservation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1737,7 +1463,6 @@ export const rejectReservation = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva existe
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
       include: {
@@ -1757,16 +1482,14 @@ export const rejectReservation = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva esté pendiente
     if (reservation.status.name !== "pendiente") {
       return res.status(400).json({ 
         message: `No se puede rechazar una reserva con estado: ${reservation.status.label}` 
       });
     }
 
-    // Rechazar la reserva con transacción
     const rejectedReservation = await prisma.$transaction(async (tx) => {
-      // Actualizar status a cancelada
+      
       const updated = await tx.reservation.update({
         where: { id: reservationId },
         data: { 
@@ -1781,16 +1504,19 @@ export const rejectReservation = async (req: Request, res: Response) => {
         }
       });
 
-      // Crear notificación para el usuario
       const notificationMessage = reason 
         ? `Tu reserva para ${reservation.amenity.name} ha sido rechazada. Motivo: ${reason}`
         : `Tu reserva para ${reservation.amenity.name} ha sido rechazada por un administrador.`;
 
+      const cancelledType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_cancelled' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_cancelled',
+          typeId: cancelledType!.id,
           title: 'Reserva Rechazada',
           message: notificationMessage
         }
@@ -1799,7 +1525,7 @@ export const rejectReservation = async (req: Request, res: Response) => {
       return updated;
     });
 
-    // Enviar email de rechazo
+    // email de rechazo
     emailService.sendReservationCancellationEmail(
       reservation.user.email,
       reservation.user.name,
@@ -1827,10 +1553,6 @@ export const rejectReservation = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /admin/reservations/pending - Obtener todas las reservas pendientes
- * Acceso: Solo administradores
- */
 export const getPendingReservations = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
@@ -1883,11 +1605,6 @@ export const getPendingReservations = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * DELETE /admin/reservations/:id/cancel - Cancelar cualquier reserva (admin)
- * Acceso: Solo administradores
- * Permite al admin cancelar reservas confirmadas, pendientes, o incluso pasadas
- */
 export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -1903,7 +1620,6 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva existe
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
       include: {
@@ -1930,9 +1646,8 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
       });
     }
 
-    // Cancelar la reserva con transacción
     const cancelledReservation = await prisma.$transaction(async (tx) => {
-      // Actualizar status a cancelada
+      
       const updated = await tx.reservation.update({
         where: { id: reservationId },
         data: { 
@@ -1947,16 +1662,19 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
         }
       });
 
-      // Crear notificación para el usuario
       const notificationMessage = reason 
         ? `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador. Motivo: ${reason}`
         : `Tu reserva para ${reservation.amenity.name} ha sido cancelada por un administrador.`;
 
+      const cancelledType = await tx.userNotificationType.findUnique({
+        where: { name: 'reservation_cancelled' }
+      });
+      
       await tx.userNotification.create({
         data: {
           userId: reservation.user.id,
           reservationId: reservationId,
-          notificationType: 'reservation_cancelled',
+          typeId: cancelledType!.id,
           title: 'Reserva Cancelada por Administrador',
           message: notificationMessage
         }
@@ -1965,7 +1683,7 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
       return updated;
     });
 
-    // Enviar email de cancelación
+    // email de cancelación
     emailService.sendReservationCancellationEmail(
       reservation.user.email,
       reservation.user.name,

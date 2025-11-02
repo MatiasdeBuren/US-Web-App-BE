@@ -40,7 +40,37 @@ INSERT INTO "claim_statuses" (name, label, color) VALUES
   ('rechazado', 'Rechazado', '#DC3545')
 ON CONFLICT (name) DO NOTHING;
 
--- 5. USUARIOS (Admin y Owners primero, sin apartmentId)
+-- 5. TIPOS DE NOTIFICACIONES DE ADMIN
+INSERT INTO "admin_notification_types" (name, label) VALUES
+  ('nuevo_reclamo', 'Nuevo Reclamo'),
+  ('reclamo_urgente', 'Reclamo Urgente'),
+  ('reserva_pendiente', 'Reserva Pendiente de Aprobación')
+ON CONFLICT (name) DO NOTHING;
+
+-- 6. TIPOS DE NOTIFICACIONES DE USUARIO
+INSERT INTO "user_notification_types" (name, label) VALUES
+  ('reserva_confirmada', 'Reserva Confirmada'),
+  ('reserva_cancelada', 'Reserva Cancelada'),
+  ('reserva_modificada', 'Reserva Modificada'),
+  ('reserva_rechazada', 'Reserva Rechazada')
+ON CONFLICT (name) DO NOTHING;
+
+-- 5. TIPOS DE NOTIFICACIONES DE ADMIN
+INSERT INTO "admin_notification_types" (name, label) VALUES
+  ('nuevo_reclamo', 'Nuevo Reclamo'),
+  ('reclamo_urgente', 'Reclamo Urgente'),
+  ('reserva_pendiente', 'Reserva Pendiente de Aprobación')
+ON CONFLICT (name) DO NOTHING;
+
+-- 6. TIPOS DE NOTIFICACIONES DE USUARIO
+INSERT INTO "user_notification_types" (name, label) VALUES
+  ('reserva_confirmada', 'Reserva Confirmada'),
+  ('reserva_cancelada', 'Reserva Cancelada'),
+  ('reserva_modificada', 'Reserva Modificada'),
+  ('reserva_rechazada', 'Reserva Rechazada')
+ON CONFLICT (name) DO NOTHING;
+
+-- 7. USUARIOS (Admin y Owners primero, sin apartmentId)
 -- Admin (password: 12345A)
 INSERT INTO "User" (name, email, password, role, "createdAt") 
 VALUES (
@@ -74,7 +104,7 @@ VALUES (
 )
 ON CONFLICT (email) DO NOTHING;
 
--- 6. APARTAMENTOS (después de owners, antes de tenants)
+-- 8. APARTAMENTOS (después de owners, antes de tenants)
 INSERT INTO "Apartment" (unit, floor, "areaM2", observations, rooms, "ownerId") 
 VALUES
   ('101', 1, 65.5, 'Apartamento luminoso con vista al parque', 2, 
@@ -88,7 +118,7 @@ VALUES
   ('202', 2, 70.0, 'Vista panorámica', 2, 
    (SELECT id FROM "User" WHERE email = 'juan.perez@email.com'));
 
--- 7. TENANTS (después de apartamentos)
+-- 9. TENANTS (después de apartamentos)
 INSERT INTO "User" (name, email, password, role, "apartmentId", "createdAt") 
 VALUES (
   'María González',
@@ -116,7 +146,7 @@ VALUES (
 )
 ON CONFLICT (email) DO NOTHING;
 
--- 8. AMENITIES
+-- 10. AMENITIES
 INSERT INTO "Amenity" (name, capacity, "maxDuration", "openTime", "closeTime", "isActive", "requiresApproval") 
 VALUES
   ('Gimnasio', 10, 120, '06:00', '22:00', true, false),
@@ -171,11 +201,11 @@ VALUES (
   NOW()
 );
 
--- ADHESIONES A CLAIMS
-INSERT INTO "ClaimAdhesion" ("claimId", "userId", "adhesionType", "createdAt", "updatedAt") VALUES
-  (1, (SELECT id FROM "User" WHERE email = 'ana.martinez@email.com'), 'support', NOW(), NOW()),
-  (1, (SELECT id FROM "User" WHERE email = 'pedro.lopez@email.com'), 'support', NOW(), NOW()),
-  (2, (SELECT id FROM "User" WHERE email = 'maria.gonzalez@email.com'), 'support', NOW(), NOW());
+-- ADHESIONES A CLAIMS (ahora usa isSupport en lugar de adhesionType)
+INSERT INTO "ClaimAdhesion" ("claimId", "userId", "isSupport", "createdAt", "updatedAt") VALUES
+  (1, (SELECT id FROM "User" WHERE email = 'ana.martinez@email.com'), true, NOW(), NOW()),
+  (1, (SELECT id FROM "User" WHERE email = 'pedro.lopez@email.com'), true, NOW(), NOW()),
+  (2, (SELECT id FROM "User" WHERE email = 'maria.gonzalez@email.com'), true, NOW(), NOW());
 
 -- RESERVAS DE EJEMPLO
 INSERT INTO "Reservation" ("userId", "amenityId", "startTime", "endTime", "statusId", "hiddenFromUser", "createdAt") 

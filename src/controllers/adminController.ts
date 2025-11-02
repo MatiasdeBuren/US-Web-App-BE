@@ -1,11 +1,10 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
-import { wouldBeLastAdmin } from "../middleware/adminMiddleware";
 import { emailService } from "../services/emailService";
 
 export const getSystemStats = async (req: Request, res: Response) => {
   try {
-    console.log(`📊 [ADMIN STATS] User ${(req as any).user.email} requesting system stats`);
+    console.log(`[ADMIN STATS] User ${(req as any).user.email} requesting system stats`);
 
     const [
       totalUsers,
@@ -37,7 +36,7 @@ export const getSystemStats = async (req: Request, res: Response) => {
       generatedAt: new Date().toISOString()
     };
 
-    console.log(`✅ [ADMIN STATS] Stats generated successfully:`, stats);
+    console.log(`[ADMIN STATS] Stats generated successfully:`, stats);
 
     res.json(stats);
   } catch (error) {
@@ -80,7 +79,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
       ]
     });
 
-    // Formatear respuesta con información adicional
     const formattedUsers = users.map(user => ({
       id: user.id,
       name: user.name,
@@ -97,7 +95,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
       ownedApartmentsCount: user._count.ownedApartments
     }));
 
-    console.log(`✅ [ADMIN USERS] Retrieved ${formattedUsers.length} users`);
+    console.log(` [ADMIN USERS] Retrieved ${formattedUsers.length} users`);
 
     res.json({
       users: formattedUsers,
@@ -118,9 +116,8 @@ export const updateUserRole = async (req: Request, res: Response) => {
     const { role } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`🔄 [ADMIN ROLE CHANGE] User ${adminUser.email} attempting to change user ${id} role to ${role}`);
+    console.log(`[ADMIN ROLE CHANGE] User ${adminUser.email} attempting to change user ${id} role to ${role}`);
 
-    // Validar que el role sea válido
     const validRoles = ["admin", "tenant", "owner"];
     if (!role || !validRoles.includes(role)) {
       return res.status(400).json({ 
@@ -135,7 +132,6 @@ export const updateUserRole = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que el usuario existe
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, name: true, email: true, role: true }
@@ -147,18 +143,6 @@ export const updateUserRole = async (req: Request, res: Response) => {
       });
     }
 
-    // No se puede eliminar el último admin 
-    if (targetUser.role === "admin" && role !== "admin") {
-      const isLastAdmin = await wouldBeLastAdmin(userId);
-      if (isLastAdmin) {
-        console.log(`🚨 [SECURITY] Attempt to remove last admin blocked. User: ${adminUser.email}, Target: ${targetUser.email}`);
-        return res.status(403).json({ 
-          message: "No se puede eliminar el rol de administrador del último administrador en el sistema" 
-        });
-      }
-    }
-
-    // Actualizar el rol
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { role },
@@ -170,7 +154,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [ADMIN ROLE CHANGE] Successfully changed user ${targetUser.email} role from ${targetUser.role} to ${role}`);
+    console.log(` [ADMIN ROLE CHANGE] Successfully changed user ${targetUser.email} role from ${targetUser.role} to ${role}`);
 
     res.json({
       message: "Rol de usuario actualizado con éxito",
@@ -194,9 +178,8 @@ export const getAllReservations = async (req: Request, res: Response) => {
     const { status, amenityId, limit = "50" } = req.query;
     const adminUser = (req as any).user;
 
-    console.log(`📋 [ADMIN RESERVATIONS] User ${adminUser.email} requesting reservations. Filters:`, { status, amenityId, limit });
+    console.log(` [ADMIN RESERVATIONS] User ${adminUser.email} requesting reservations. Filters:`, { status, amenityId, limit });
 
-    // Construir filtros
     const where: any = {};
     
     if (status && typeof status === "string") {
@@ -238,7 +221,7 @@ export const getAllReservations = async (req: Request, res: Response) => {
       take: maxLimit
     });
 
-    console.log(`✅ [ADMIN RESERVATIONS] Retrieved ${reservations.length} reservations`);
+    console.log(` [ADMIN RESERVATIONS] Retrieved ${reservations.length} reservations`);
 
     res.json({
       reservations,
@@ -263,7 +246,7 @@ export const createAmenity = async (req: Request, res: Response) => {
 
     console.log(`➕ [ADMIN CREATE AMENITY] User ${adminUser.email} creating amenity:`, { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval });
 
-    // Validaciones obligatorias
+    // Validaciones
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return res.status(400).json({ 
         message: "El nombre de la amenity es obligatorio y debe ser una cadena no vacía" 
@@ -299,7 +282,6 @@ export const createAmenity = async (req: Request, res: Response) => {
       }
     }
 
-    // Validar que el horario de apertura sea anterior al de cierre
     if (openTime && closeTime) {
       const [openHour, openMin] = openTime.split(':').map(Number);
       const [closeHour, closeMin] = closeTime.split(':').map(Number);
@@ -313,7 +295,6 @@ export const createAmenity = async (req: Request, res: Response) => {
       }
     }
 
-    // Verificar que no exista un amenity con el mismo nombre
     const existingAmenity = await prisma.amenity.findFirst({
       where: {
         name: {
@@ -335,7 +316,6 @@ export const createAmenity = async (req: Request, res: Response) => {
       maxDuration
     };
 
-    // Agregar campos opcionales solo si se proporcionan
     if (openTime !== undefined) {
       createData.openTime = openTime;
     }
@@ -352,7 +332,6 @@ export const createAmenity = async (req: Request, res: Response) => {
       createData.requiresApproval = Boolean(requiresApproval);
     }
 
-    // Crear el amenity
     const newAmenity = await prisma.amenity.create({
       data: createData
     });
@@ -380,7 +359,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
     const { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`✏️ [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval });
+    console.log(` [ADMIN UPDATE AMENITY] User ${adminUser.email} updating amenity ${id}:`, { name, capacity, maxDuration, openTime, closeTime, isActive, requiresApproval });
 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
@@ -461,7 +440,6 @@ export const updateAmenity = async (req: Request, res: Response) => {
       updateData.requiresApproval = Boolean(requiresApproval);
     }
 
-    // Validar que el horario de apertura sea anterior al de cierre (solo si ambos se están actualizando o ya existen)
     const finalOpenTime = updateData.openTime !== undefined ? updateData.openTime : existingAmenity.openTime;
     const finalCloseTime = updateData.closeTime !== undefined ? updateData.closeTime : existingAmenity.closeTime;
 
@@ -504,7 +482,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
       data: updateData
     });
 
-    console.log(`✅ [ADMIN UPDATE AMENITY] Successfully updated amenity: ${updatedAmenity.name} (ID: ${updatedAmenity.id}) with hours: ${updatedAmenity.openTime || 'N/A'} - ${updatedAmenity.closeTime || 'N/A'}`);
+    console.log(` [ADMIN UPDATE AMENITY] Successfully updated amenity: ${updatedAmenity.name} (ID: ${updatedAmenity.id}) with hours: ${updatedAmenity.openTime || 'N/A'} - ${updatedAmenity.closeTime || 'N/A'}`);
 
     res.json({
       message: "Amenity actualizada con éxito",
@@ -525,7 +503,7 @@ export const updateAmenity = async (req: Request, res: Response) => {
 export const getAllApartments = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
-    console.log(`🏠 [ADMIN APARTMENTS] User ${adminUser.email} requesting all apartments`);
+    console.log(` [ADMIN APARTMENTS] User ${adminUser.email} requesting all apartments`);
 
     const apartments = await prisma.apartment.findMany({
       include: {
@@ -557,7 +535,6 @@ export const getAllApartments = async (req: Request, res: Response) => {
       ]
     });
 
-    // Formatear respuesta con información adicional
     const formattedApartments = apartments.map(apartment => {
       const isOccupied = apartment.tenants.length > 0;
       const tenant = apartment.tenants.length > 0 ? apartment.tenants[0] : null;
@@ -579,7 +556,7 @@ export const getAllApartments = async (req: Request, res: Response) => {
       };
     });
 
-    console.log(`✅ [ADMIN APARTMENTS] Retrieved ${formattedApartments.length} apartments`);
+    console.log(` [ADMIN APARTMENTS] Retrieved ${formattedApartments.length} apartments`);
 
     res.json({
       apartments: formattedApartments,
@@ -601,7 +578,7 @@ export const createApartment = async (req: Request, res: Response) => {
     const { unit, floor, rooms, areaM2, observations, ownerId } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`➕ [ADMIN CREATE APARTMENT] User ${adminUser.email} creating apartment:`, { unit, floor, rooms, ownerId });
+    console.log(`[ADMIN CREATE APARTMENT] User ${adminUser.email} creating apartment:`, { unit, floor, rooms, ownerId });
 
     if (!unit || typeof unit !== "string" || unit.trim().length === 0) {
       return res.status(400).json({ 
@@ -679,7 +656,6 @@ export const createApartment = async (req: Request, res: Response) => {
       createData.owner = { connect: { id: ownerId } };
     }
 
-    // Crear el apartamento
     const newApartment = await prisma.apartment.create({
       data: createData,
       include: {
@@ -694,7 +670,7 @@ export const createApartment = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [ADMIN CREATE APARTMENT] Successfully created apartment: ${newApartment.unit} (ID: ${newApartment.id})`);
+    console.log(`[ADMIN CREATE APARTMENT] Successfully created apartment: ${newApartment.unit} (ID: ${newApartment.id})`);
 
     res.status(201).json({
       message: "Apartamento creado con éxito",
@@ -722,7 +698,7 @@ export const updateApartment = async (req: Request, res: Response) => {
     const { unit, floor, rooms, areaM2, observations, ownerId, tenantId } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`✏️ [ADMIN UPDATE APARTMENT] User ${adminUser.email} updating apartment ${id}:`, req.body);
+    console.log(` [ADMIN UPDATE APARTMENT] User ${adminUser.email} updating apartment ${id}:`, req.body);
 
     const apartmentId = parseInt(id || "");
     if (isNaN(apartmentId)) {
@@ -755,7 +731,6 @@ export const updateApartment = async (req: Request, res: Response) => {
         });
       }
 
-      // Verificar que el nuevo unit no exista (excepto el actual)
       if (unit.trim() !== existingApartment.unit) {
         const duplicateApartment = await prisma.apartment.findFirst({
           where: {
@@ -780,7 +755,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       updatedFields.push("unit");
     }
 
-    // Validar y actualizar floor
     if (floor !== undefined) {
       if (typeof floor !== "number" || floor < 1) {
         return res.status(400).json({ 
@@ -791,7 +765,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       updatedFields.push("floor");
     }
 
-    // Validar y actualizar rooms
     if (rooms !== undefined) {
       if (typeof rooms !== "number" || rooms < 1 || rooms > 10) {
         return res.status(400).json({ 
@@ -802,7 +775,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       updatedFields.push("rooms");
     }
 
-    // Actualizar areaM2
     if (areaM2 !== undefined) {
       if (areaM2 === null) {
         updateData.areaM2 = null;
@@ -816,13 +788,11 @@ export const updateApartment = async (req: Request, res: Response) => {
       updatedFields.push("areaM2");
     }
 
-    // Actualizar observations
     if (observations !== undefined) {
       updateData.observations = observations === null ? null : observations.trim();
       updatedFields.push("observations");
     }
 
-    // Validar y actualizar owner
     if (ownerId !== undefined) {
       if (ownerId === null) {
         updateData.owner = { disconnect: true };
@@ -854,7 +824,6 @@ export const updateApartment = async (req: Request, res: Response) => {
       }
     }
 
-    // Validar y actualizar tenant
     if (tenantId !== undefined) {
       if (tenantId === null) {
         // Desconectar tenant actual
@@ -887,7 +856,6 @@ export const updateApartment = async (req: Request, res: Response) => {
           });
         }
 
-        // Desconectar tenant actual si existe
         const currentTenant = existingApartment.tenants[0];
         if (currentTenant && currentTenant.id !== tenantId) {
           updateData.tenants = { 
@@ -934,7 +902,7 @@ export const updateApartment = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [ADMIN UPDATE APARTMENT] Successfully updated apartment: ${updatedApartment.unit} (ID: ${updatedApartment.id})`);
+    console.log(`[ADMIN UPDATE APARTMENT] Successfully updated apartment: ${updatedApartment.unit} (ID: ${updatedApartment.id})`);
 
     res.json({
       message: "Apartment updated successfully",
@@ -970,7 +938,6 @@ export const deleteApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que el apartamento existe y obtener dependencias
     const apartment = await prisma.apartment.findUnique({
       where: { id: apartmentId },
       include: {
@@ -994,7 +961,6 @@ export const deleteApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar si tiene usuarios asignados
     const assignedUsers = apartment.tenants.length + (apartment.owner ? 1 : 0);
     
     if (assignedUsers > 0) {
@@ -1031,12 +997,11 @@ export const deleteApartment = async (req: Request, res: Response) => {
       });
     }
 
-    // Proceder con la eliminación
     const deletedApartment = await prisma.apartment.delete({
       where: { id: apartmentId }
     });
 
-    console.log(`✅ [ADMIN DELETE APARTMENT] Successfully deleted apartment: ${deletedApartment.unit} (ID: ${deletedApartment.id})`);
+    console.log(` [ADMIN DELETE APARTMENT] Successfully deleted apartment: ${deletedApartment.unit} (ID: ${deletedApartment.id})`);
 
     res.json({
       message: "Apartment deleted successfully",
@@ -1105,7 +1070,7 @@ export const getAllAmenities = async (req: Request, res: Response) => {
       })
     );
 
-    console.log(`✅ [ADMIN AMENITIES] Retrieved ${amenitiesWithCounts.length} amenities`);
+    console.log(` [ADMIN AMENITIES] Retrieved ${amenitiesWithCounts.length} amenities`);
 
     res.json({
       amenities: amenitiesWithCounts,
@@ -1127,7 +1092,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
     const { id } = req.params;
     const adminUser = (req as any).user;
 
-    console.log(`🗑️ [ADMIN DELETE AMENITY] User ${adminUser.email} attempting to delete amenity ${id}`);
+    console.log(` [ADMIN DELETE AMENITY] User ${adminUser.email} attempting to delete amenity ${id}`);
 
     const amenityId = parseInt(id || "");
     if (isNaN(amenityId)) {
@@ -1172,7 +1137,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`� [ADMIN DELETE AMENITY] Amenity ${amenity.name}: ${allReservations} total reservations, ${activeReservations} active`);
+    console.log(` [ADMIN DELETE AMENITY] Amenity ${amenity.name}: ${allReservations} total reservations, ${activeReservations} active`);
 
     const result = await prisma.$transaction(async (tx) => {
       
@@ -1182,7 +1147,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
         }
       });
 
-      console.log(`🗑️ [ADMIN DELETE AMENITY] Deleted ${deletedReservations.count} reservations for amenity ${amenity.name}`);
+      console.log(`[ADMIN DELETE AMENITY] Deleted ${deletedReservations.count} reservations for amenity ${amenity.name}`);
 
       const deletedAmenity = await tx.amenity.delete({
         where: { id: amenityId }
@@ -1191,7 +1156,7 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       return { deletedAmenity, deletedReservationsCount: deletedReservations.count };
     });
 
-    console.log(`✅ [ADMIN DELETE AMENITY] Successfully deleted amenity: ${result.deletedAmenity.name} (ID: ${result.deletedAmenity.id}) and ${result.deletedReservationsCount} related reservations`);
+    console.log(`[ADMIN DELETE AMENITY] Successfully deleted amenity: ${result.deletedAmenity.name} (ID: ${result.deletedAmenity.id}) and ${result.deletedReservationsCount} related reservations`);
 
     res.status(200).json({
       message: "Amenity eliminado exitosamente",
@@ -1276,7 +1241,7 @@ export const getAmenityDetailReservations = async (req: Request, res: Response) 
       }
     }));
 
-    console.log(`✅ [ADMIN] Retrieved ${formattedReservations.length} reservations for ${amenity.name}`);
+    console.log(`[ADMIN] Retrieved ${formattedReservations.length} reservations for ${amenity.name}`);
 
     res.json({
       reservations: formattedReservations,
@@ -1297,7 +1262,7 @@ export const approveReservation = async (req: Request, res: Response) => {
     const { id } = req.params;
     const adminUser = (req as any).user;
 
-    console.log(`✅ [ADMIN APPROVE RESERVATION] Admin ${adminUser.email} approving reservation ${id}`);
+    console.log(` [ADMIN APPROVE RESERVATION] Admin ${adminUser.email} approving reservation ${id}`);
 
     const reservationId = parseInt(id || "");
     if (isNaN(reservationId)) {
@@ -1343,12 +1308,12 @@ export const approveReservation = async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`📊 [CAPACITY CHECK] Amenity: ${reservation.amenity.name}, Capacity: ${reservation.amenity.capacity}, Current confirmed: ${overlappingCount}`);
+    console.log(` [CAPACITY CHECK] Amenity: ${reservation.amenity.name}, Capacity: ${reservation.amenity.capacity}, Current confirmed: ${overlappingCount}`);
 
     if (overlappingCount >= reservation.amenity.capacity) {
       // Auto-rechazar la reserva si no hay capacidad
       await prisma.$transaction(async (tx) => {
-        // Actualizar status a cancelada
+        
         await tx.reservation.update({
           where: { id: reservationId },
           data: { 
@@ -1356,7 +1321,6 @@ export const approveReservation = async (req: Request, res: Response) => {
           }
         });
 
-        // Crear notificación para el usuario
         const cancelledType = await tx.userNotificationType.findUnique({
           where: { name: 'reservation_cancelled' }
         });
@@ -1381,7 +1345,7 @@ export const approveReservation = async (req: Request, res: Response) => {
         reservation.endTime
       ).catch(err => console.error('Error sending auto-rejection email:', err));
 
-      console.log(`⚠️ [AUTO-REJECT] Reservation ${id} auto-rejected due to full capacity`);
+      console.log(` [AUTO-REJECT] Reservation ${id} auto-rejected due to full capacity`);
 
       return res.status(409).json({ 
         message: "No se puede aprobar: el horario está lleno. La reserva ha sido rechazada automáticamente y el usuario ha sido notificado.",
@@ -1431,7 +1395,7 @@ export const approveReservation = async (req: Request, res: Response) => {
       reservation.endTime
     ).catch(err => console.error('Error sending approval email:', err));
 
-    console.log(`✅ [ADMIN APPROVE RESERVATION] Reservation ${id} approved successfully`);
+    console.log(` [ADMIN APPROVE RESERVATION] Reservation ${id} approved successfully`);
 
     res.json({
       message: "Reserva aprobada exitosamente",
@@ -1454,7 +1418,7 @@ export const rejectReservation = async (req: Request, res: Response) => {
     const { reason } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`❌ [ADMIN REJECT RESERVATION] Admin ${adminUser.email} rejecting reservation ${id}`);
+    console.log(` [ADMIN REJECT RESERVATION] Admin ${adminUser.email} rejecting reservation ${id}`);
 
     const reservationId = parseInt(id || "");
     if (isNaN(reservationId)) {
@@ -1535,7 +1499,7 @@ export const rejectReservation = async (req: Request, res: Response) => {
       reason // Pasar la razón al email
     ).catch(err => console.error('Error sending rejection email:', err));
 
-    console.log(`❌ [ADMIN REJECT RESERVATION] Reservation ${id} rejected successfully`);
+    console.log(` [ADMIN REJECT RESERVATION] Reservation ${id} rejected successfully`);
 
     res.json({
       message: "Reserva rechazada exitosamente",
@@ -1556,7 +1520,7 @@ export const rejectReservation = async (req: Request, res: Response) => {
 export const getPendingReservations = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
-    console.log(`📋 [ADMIN PENDING RESERVATIONS] Admin ${adminUser.email} requesting pending reservations`);
+    console.log(`[ADMIN PENDING RESERVATIONS] Admin ${adminUser.email} requesting pending reservations`);
 
     const pendingReservations = await prisma.reservation.findMany({
       where: {
@@ -1589,7 +1553,7 @@ export const getPendingReservations = async (req: Request, res: Response) => {
       orderBy: { createdAt: "desc" }
     });
 
-    console.log(`✅ [ADMIN PENDING RESERVATIONS] Found ${pendingReservations.length} pending reservations`);
+    console.log(` [ADMIN PENDING RESERVATIONS] Found ${pendingReservations.length} pending reservations`);
 
     res.json({
       reservations: pendingReservations,
@@ -1639,7 +1603,6 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
       });
     }
 
-    // Verificar que la reserva no esté ya cancelada
     if (reservation.status.name === "cancelada") {
       return res.status(400).json({ 
         message: "La reserva ya está cancelada" 
@@ -1693,7 +1656,7 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
       reason // Pasar la razón al email
     ).catch(err => console.error('Error sending admin cancellation email:', err));
 
-    console.log(`✅ [ADMIN CANCEL RESERVATION] Reservation ${id} cancelled successfully by admin`);
+    console.log(` [ADMIN CANCEL RESERVATION] Reservation ${id} cancelled successfully by admin`);
 
     res.json({
       message: "Reserva cancelada exitosamente",
@@ -1704,7 +1667,7 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error("❌ [ADMIN CANCEL RESERVATION ERROR]", error);
+    console.error(" [ADMIN CANCEL RESERVATION ERROR]", error);
     res.status(500).json({ 
       message: "Error al cancelar la reserva" 
     });

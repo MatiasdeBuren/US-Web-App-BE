@@ -19,7 +19,7 @@ const logSecurityEvent = (
   const userAgent = req.get("User-Agent") || "unknown";
   const endpoint = req.originalUrl;
   
-  console.log(`🚨 [SECURITY LOG] ${timestamp} - ${event}`, {
+  console.log(` [SECURITY LOG] ${timestamp} - ${event}`, {
     userId: userId || "unknown",
     userEmail: userEmail || "unknown",
     endpoint,
@@ -30,10 +30,10 @@ const logSecurityEvent = (
 };
 
 export const validateAdmin = async (req: Request, res: Response, next: NextFunction) => {
-  console.log(`🔍 [ADMIN MIDDLEWARE] Iniciando validación para ${req.method} ${req.originalUrl}`);
+  console.log(` [ADMIN MIDDLEWARE] Iniciando validación para ${req.method} ${req.originalUrl}`);
   try {
     const authHeader = req.headers.authorization;
-    console.log(`🔍 [ADMIN MIDDLEWARE] AuthHeader presente: ${!!authHeader}`);
+    console.log(` [ADMIN MIDDLEWARE] AuthHeader presente: ${!!authHeader}`);
     
     if (!authHeader) {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req);
@@ -74,7 +74,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    console.log(`🔍 [ADMIN MIDDLEWARE] Consultando usuario ID: ${payload.id}`);
+    console.log(` [ADMIN MIDDLEWARE] Consultando usuario ID: ${payload.id}`);
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
       select: {
@@ -84,7 +84,7 @@ export const validateAdmin = async (req: Request, res: Response, next: NextFunct
         name: true
       }
     });
-    console.log(`🔍 [ADMIN MIDDLEWARE] Usuario encontrado:`, user ? { id: user.id, email: user.email, role: user.role } : null);
+    console.log(` [ADMIN MIDDLEWARE] Usuario encontrado:`, user ? { id: user.id, email: user.email, role: user.role } : null);
 
     if (!user) {
       logSecurityEvent("UNAUTHORIZED_ADMIN_ACCESS", req, payload.id, payload.email);
@@ -134,28 +134,5 @@ export const ensureAdminExists = async (): Promise<boolean> => {
   } catch (error) {
     console.error("❌ Error checking admin existence:", error);
     return false;
-  }
-};
-
-
-export const wouldBeLastAdmin = async (userId: number): Promise<boolean> => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true }
-    });
-
-    if (user?.role !== "admin") {
-      return false;
-    }
-
-    const adminCount = await prisma.user.count({
-      where: { role: "admin" }
-    });
-
-    return adminCount === 1; 
-  } catch (error) {
-    console.error("❌ Error checking if would be last admin:", error);
-    return true; 
   }
 };

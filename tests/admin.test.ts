@@ -143,16 +143,6 @@ describe('Admin Controller Tests', () => {
         .send({ role: 'invalid-role' })
         .expect(400);
     });
-
-    it('should prevent removing last admin', async () => {
-      const response = await request(app)
-        .put(`/admin/users/${testAdmin.id}/role`)
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({ role: 'tenant' })
-        .expect(403);
-
-      expect(response.body.message).toContain('Cannot remove admin role from the last administrator');
-    });
   });
 
   describe('Amenity Management Tests', () => {

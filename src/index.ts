@@ -5,16 +5,11 @@ import { requireAuth } from "./auth_middleware";
 import amenityRoutes from "./routes/get_ammenities";
 import reservationRoutes from "./routes/reservations";
 import userRoutes from "./routes/user";
-
 import apartmentRoutes from "./routes/apartmentRoutes";
 import claimRoutes from "./routes/claimRoutes";
 import claimAdhesionRoutes from "./routes/claimAdhesionRoutes";
-
 import adminRoutes from "./routes/adminRoutes";
-
 import { emailService } from "./services/emailService";
-import { ReservationStatusService } from "./services/reservationStatusService";
-import { ClaimLookupService } from "./services/claimLookupService";
 import { prisma } from "./prismaClient";
 
 const app = express();
@@ -83,22 +78,36 @@ app.get("/dashboard", requireAuth, async (req, res) => {
     }
 });
 
-
-async function initializeServices() {
+async function updateExpiredReservations() {
   try {
-    console.log('Initializing lookup tables...');
-    await ClaimLookupService.initializeClaimLookupTables();
+    const finalizadaStatus = await prisma.reservationStatus.findUnique({
+      where: { name: 'finalizada' }
+    });
     
-    console.log('Starting reservation status service...');
-    ReservationStatusService.startAutoUpdate();
+    if (!finalizadaStatus) return;
     
-    console.log('All services initialized successfully');
+    const result = await prisma.reservation.updateMany({
+      where: {
+        status: { name: 'confirmada' },
+        endTime: { lt: new Date() }
+      },
+      data: {
+        statusId: finalizadaStatus.id
+      }
+    });
+    
+    if (result.count > 0) {
+      console.log(`Updated ${result.count} expired reservations`);
+    }
   } catch (error) {
-    console.error('Error initializing services:', error);
+    console.error('Error updating reservations:', error);
   }
 }
 
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
-  await initializeServices();
+  
+  // Update expired reservations every 5 minutes
+  setInterval(updateExpiredReservations, 5 * 60 * 1000);
+  updateExpiredReservations();
 });

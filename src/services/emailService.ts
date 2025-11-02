@@ -524,7 +524,7 @@ Este es un correo automático, por favor no respondas a esta dirección.
             </div>
             
             <p><strong>Recordatorio:</strong> Por favor, llega a tiempo y recuerda que puedes cancelar tu reserva desde la aplicación si es necesario.</p>
-            
+            <a class="button" href="https://us-web-app-fe.onrender.com">Ver Mis Reservas</a>
             <div class="footer">
                 <p><strong>US Team</strong></p>
                 <p style="font-size: 12px; color: #999;">

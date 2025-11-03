@@ -23,6 +23,7 @@ model User {
   claimAdhesions ClaimAdhesion[] @relation("UserClaimAdhesions")
   adminNotifications AdminNotification[] @relation("AdminNotifications")
   userNotifications UserNotification[] @relation("UserNotifications")
+  amenityRatings AmenityRating[] @relation("UserRatings")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
   createdAt             DateTime      @default(now())
@@ -38,6 +39,7 @@ model Amenity {
   isActive     Boolean       @default(true)
   requiresApproval Boolean   @default(false)
   reservations Reservation[]
+  ratings      AmenityRating[]
 }
 
 model ReservationStatus {
@@ -228,4 +230,25 @@ model UserNotification {
   @@index([isRead])
   @@index([userId, isRead])
   @@map("user_notifications")
+}
+
+model AmenityRating {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  amenityId        Int
+  overallRating    Float
+  cleanliness      Int?
+  equipment        Int?
+  comfort          Int?
+  compliance       Int?
+  comment          String?
+  createdAt        DateTime @default(now())
+  
+  user             User     @relation("UserRatings", fields: [userId], references: [id], onDelete: Cascade)
+  amenity          Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, amenityId])
+  @@index([amenityId])
+  @@index([userId])
+  @@map("amenity_ratings")
 }

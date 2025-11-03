@@ -1,0 +1,262 @@
+import { Request, Response } from 'express';
+import { prisma } from '../prismaClient';
+
+interface AuthRequest extends Request {
+    user?: {
+        id: number;
+        email: string;
+        role: string;
+    };
+}
+
+export const createRating = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id;
+        const { reservationId, amenityId, overallRating, cleanliness, equipment, comfort, compliance, comment } = req.body;
+
+        if (!userId) {
+            res.status(401).json({ error: 'Usuario no autenticado' });
+            return;
+        }
+
+        if (!reservationId || !amenityId || !overallRating) {
+            res.status(400).json({ error: 'Datos incompletos' });
+            return;
+        }
+
+        if (overallRating < 1 || overallRating > 3) {
+            res.status(400).json({ error: 'Calificación inválida' });
+            return;
+        }
+
+        const reservation = await prisma.reservation.findFirst({
+            where: {
+                id: reservationId,
+                userId: userId,
+                amenityId: amenityId,
+                status: { name: 'finalizada' }
+            }
+        });
+
+        if (!reservation) {
+            res.status(404).json({ error: 'Reserva no encontrada o no finalizada' });
+            return;
+        }
+
+        const existingRating = await prisma.amenityRating.findUnique({
+            where: {
+                userId_reservationId: {
+                    userId: userId,
+                    reservationId: reservationId
+                }
+            }
+        });
+
+        if (existingRating) {
+            res.status(400).json({ error: 'Ya calificaste esta reserva' });
+            return;
+        }
+
+        const rating = await prisma.amenityRating.create({
+            data: {
+                userId,
+                amenityId,
+                reservationId,
+                overallRating,
+                cleanliness: cleanliness || null,
+                equipment: equipment || null,
+                comfort: comfort || null,
+                compliance: compliance || null,
+                comment: comment || null
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true
+                    }
+                },
+                amenity: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
+        });
+
+        res.status(201).json(rating);
+    } catch (error) {
+        console.error('Error creating rating:', error);
+        res.status(500).json({ error: 'Error al crear calificación' });
+    }
+};
+
+export const getAmenityRatings = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { amenityId } = req.params;
+
+        if (!amenityId) {
+            res.status(400).json({ error: 'ID de amenity requerido' });
+            return;
+        }
+
+        const ratings = await prisma.amenityRating.findMany({
+            where: {
+                amenityId: parseInt(amenityId)
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        const stats = await prisma.amenityRating.aggregate({
+            where: {
+                amenityId: parseInt(amenityId)
+            },
+            _avg: {
+                overallRating: true,
+                cleanliness: true,
+                equipment: true,
+                comfort: true,
+                compliance: true
+            },
+            _count: {
+                id: true
+            }
+        });
+
+        res.json({
+            ratings,
+            stats: {
+                averageRating: stats._avg.overallRating || 0,
+                totalRatings: stats._count.id,
+                averages: {
+                    cleanliness: stats._avg.cleanliness,
+                    equipment: stats._avg.equipment,
+                    comfort: stats._avg.comfort,
+                    compliance: stats._avg.compliance
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching ratings:', error);
+        res.status(500).json({ error: 'Error al obtener calificaciones' });
+    }
+};
+
+export const getAllRatings = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const ratings = await prisma.amenityRating.findMany({
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true
+                    }
+                },
+                amenity: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json(ratings);
+    } catch (error) {
+        console.error('Error fetching all ratings:', error);
+        res.status(500).json({ error: 'Error al obtener calificaciones' });
+    }
+};
+
+export const getUserRatings = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            res.status(401).json({ error: 'Usuario no autenticado' });
+            return;
+        }
+
+        const ratings = await prisma.amenityRating.findMany({
+            where: {
+                userId: userId
+            },
+            include: {
+                amenity: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json(ratings);
+    } catch (error) {
+        console.error('Error fetching user ratings:', error);
+        res.status(500).json({ error: 'Error al obtener calificaciones del usuario' });
+    }
+};
+
+export const checkCanRate = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id;
+        const { reservationId } = req.params;
+
+        if (!userId) {
+            res.status(401).json({ error: 'Usuario no autenticado' });
+            return;
+        }
+
+        const reservation = await prisma.reservation.findFirst({
+            where: {
+                id: parseInt(reservationId),
+                userId: userId,
+                status: { name: 'finalizada' }
+            }
+        });
+
+        if (!reservation) {
+            res.json({ canRate: false, reason: 'Reserva no encontrada o no finalizada' });
+            return;
+        }
+
+        const existingRating = await prisma.amenityRating.findUnique({
+            where: {
+                userId_reservationId: {
+                    userId: userId,
+                    reservationId: parseInt(reservationId)
+                }
+            }
+        });
+
+        if (existingRating) {
+            res.json({ canRate: false, reason: 'Ya calificaste esta reserva' });
+            return;
+        }
+
+        res.json({ canRate: true });
+    } catch (error) {
+        console.error('Error checking rate permission:', error);
+        res.status(500).json({ error: 'Error al verificar permisos' });
+    }
+};

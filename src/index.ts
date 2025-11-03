@@ -9,6 +9,7 @@ import apartmentRoutes from "./routes/apartmentRoutes";
 import claimRoutes from "./routes/claimRoutes";
 import claimAdhesionRoutes from "./routes/claimAdhesionRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import ratingRoutes from "./routes/ratings";
 import { emailService } from "./services/emailService";
 import { prisma } from "./prismaClient";
 
@@ -36,6 +37,7 @@ app.use("/user", userRoutes);
 app.use("/apartments", apartmentRoutes);
 app.use("/claims", claimRoutes);
 app.use("/claims", claimAdhesionRoutes); 
+app.use("/", ratingRoutes);
 
 app.use("/admin", adminRoutes); 
 

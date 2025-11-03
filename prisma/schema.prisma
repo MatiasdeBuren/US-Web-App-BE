@@ -236,7 +236,7 @@ model AmenityRating {
   id               Int      @id @default(autoincrement())
   userId           Int
   amenityId        Int
-  overallRating    Int
+  overallRating    Float
   cleanliness      Int?
   equipment        Int?
   comfort          Int?

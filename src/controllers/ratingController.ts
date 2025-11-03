@@ -12,22 +12,33 @@ interface AuthRequest extends Request {
 export const createRating = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.id;
-        const { amenityId, overallRating, cleanliness, equipment, comfort, compliance, comment } = req.body;
+        const { amenityId, cleanliness, equipment, comfort, compliance, comment } = req.body;
 
         if (!userId) {
             res.status(401).json({ error: 'Usuario no autenticado' });
             return;
         }
 
-        if (!amenityId || !overallRating) {
-            res.status(400).json({ error: 'amenityId y overallRating son requeridos' });
+        if (!amenityId) {
+            res.status(400).json({ error: 'amenityId es requerido' });
             return;
         }
 
-        if (overallRating < 1 || overallRating > 3) {
-            res.status(400).json({ error: 'Calificación debe ser entre 1 y 3' });
+        const subcategoryRatings = [cleanliness, equipment, comfort, compliance].filter(r => r != null && r > 0);
+        
+        if (subcategoryRatings.length === 0) {
+            res.status(400).json({ error: 'Debes calificar al menos una subcategoría' });
             return;
         }
+
+        for (const rating of subcategoryRatings) {
+            if (rating < 1 || rating > 3) {
+                res.status(400).json({ error: 'Las calificaciones deben ser entre 1 y 3' });
+                return;
+            }
+        }
+
+        const overallRating = subcategoryRatings.reduce((sum, r) => sum + r, 0) / subcategoryRatings.length;
 
         const existingRating = await prisma.amenityRating.findUnique({
             where: {

@@ -40,12 +40,42 @@ INSERT INTO "claim_statuses" (name, label, color) VALUES
   ('rechazado', 'Rechazado', '#DC3545')
 ON CONFLICT (name) DO NOTHING;
 
--- 5. USUARIOS (Admin y Owners primero, sin apartmentId)
+-- 5. TIPOS DE NOTIFICACIONES DE ADMIN
+INSERT INTO "admin_notification_types" (name, label) VALUES
+  ('nuevo_reclamo', 'Nuevo Reclamo'),
+  ('reclamo_urgente', 'Reclamo Urgente'),
+  ('reserva_pendiente', 'Reserva Pendiente de Aprobación')
+ON CONFLICT (name) DO NOTHING;
+
+-- 6. TIPOS DE NOTIFICACIONES DE USUARIO
+INSERT INTO "user_notification_types" (name, label) VALUES
+  ('reserva_confirmada', 'Reserva Confirmada'),
+  ('reserva_cancelada', 'Reserva Cancelada'),
+  ('reserva_modificada', 'Reserva Modificada'),
+  ('reserva_rechazada', 'Reserva Rechazada')
+ON CONFLICT (name) DO NOTHING;
+
+-- 5. TIPOS DE NOTIFICACIONES DE ADMIN
+INSERT INTO "admin_notification_types" (name, label) VALUES
+  ('nuevo_reclamo', 'Nuevo Reclamo'),
+  ('reclamo_urgente', 'Reclamo Urgente'),
+  ('reserva_pendiente', 'Reserva Pendiente de Aprobación')
+ON CONFLICT (name) DO NOTHING;
+
+-- 6. TIPOS DE NOTIFICACIONES DE USUARIO
+INSERT INTO "user_notification_types" (name, label) VALUES
+  ('reserva_confirmada', 'Reserva Confirmada'),
+  ('reserva_cancelada', 'Reserva Cancelada'),
+  ('reserva_modificada', 'Reserva Modificada'),
+  ('reserva_rechazada', 'Reserva Rechazada')
+ON CONFLICT (name) DO NOTHING;
+
+-- 7. USUARIOS (Admin y Owners primero, sin apartmentId)
 -- Admin (password: 12345A)
 INSERT INTO "User" (name, email, password, role, "createdAt") 
 VALUES (
   'Administrador Principal',
-  'admin@edificio.com',
+  'admin@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'admin',
   NOW()
@@ -56,7 +86,7 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO "User" (name, email, password, role, "createdAt") 
 VALUES (
   'Juan Pérez',
-  'juan.perez@email.com',
+  'juan.perez@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'owner',
   NOW()
@@ -67,32 +97,32 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO "User" (name, email, password, role, "createdAt") 
 VALUES (
   'Carlos Rodríguez',
-  'carlos.rodriguez@email.com',
+  'carlos.rodriguez@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'owner',
   NOW()
 )
 ON CONFLICT (email) DO NOTHING;
 
--- 6. APARTAMENTOS (después de owners, antes de tenants)
+-- 8. APARTAMENTOS (después de owners, antes de tenants)
 INSERT INTO "Apartment" (unit, floor, "areaM2", observations, rooms, "ownerId") 
 VALUES
   ('101', 1, 65.5, 'Apartamento luminoso con vista al parque', 2, 
-   (SELECT id FROM "User" WHERE email = 'juan.perez@email.com')),
+   (SELECT id FROM "User" WHERE email = 'juan.perez@gmail.com')),
   ('201', 2, 75.0, 'Apartamento esquinero, excelente ventilación', 3, 
-   (SELECT id FROM "User" WHERE email = 'carlos.rodriguez@email.com')),
+   (SELECT id FROM "User" WHERE email = 'carlos.rodriguez@gmail.com')),
   ('102', 1, 60.0, 'Apartamento cerca del ascensor', 2, 
-   (SELECT id FROM "User" WHERE email = 'juan.perez@email.com')),
+   (SELECT id FROM "User" WHERE email = 'juan.perez@gmail.com')),
   ('301', 3, 85.5, 'Apartamento con terraza privada', 3, 
-   (SELECT id FROM "User" WHERE email = 'carlos.rodriguez@email.com')),
+   (SELECT id FROM "User" WHERE email = 'carlos.rodriguez@gmail.com')),
   ('202', 2, 70.0, 'Vista panorámica', 2, 
-   (SELECT id FROM "User" WHERE email = 'juan.perez@email.com'));
+   (SELECT id FROM "User" WHERE email = 'juan.perez@gmail.com'));
 
--- 7. TENANTS (después de apartamentos)
+-- 9. TENANTS (después de apartamentos)
 INSERT INTO "User" (name, email, password, role, "apartmentId", "createdAt") 
 VALUES (
   'María González',
-  'maria.gonzalez@email.com',
+  'maria.gonzalez@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1),
@@ -100,7 +130,7 @@ VALUES (
 ),
 (
   'Ana Martínez',
-  'ana.martinez@email.com',
+  'ana.martinez@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '201' LIMIT 1),
@@ -108,7 +138,7 @@ VALUES (
 ),
 (
   'Pedro López',
-  'pedro.lopez@email.com',
+  'pedro.lopez@gmail.com',
   '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '102' LIMIT 1),
@@ -116,7 +146,7 @@ VALUES (
 )
 ON CONFLICT (email) DO NOTHING;
 
--- 8. AMENITIES
+-- 10. AMENITIES
 INSERT INTO "Amenity" (name, capacity, "maxDuration", "openTime", "closeTime", "isActive", "requiresApproval") 
 VALUES
   ('Gimnasio', 10, 120, '06:00', '22:00', true, false),
@@ -141,7 +171,7 @@ VALUES (
   'Lobby principal',
   4,
   1,
-  (SELECT id FROM "User" WHERE email = 'maria.gonzalez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com'),
   false,
   NOW(),
   NOW()
@@ -153,7 +183,7 @@ VALUES (
   'Estacionamiento subterráneo - Sector B',
   3,
   2,
-  (SELECT id FROM "User" WHERE email = 'ana.martinez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'ana.martinez@gmail.com'),
   false,
   NOW() - INTERVAL '2 days',
   NOW()
@@ -165,22 +195,22 @@ VALUES (
   'Pasillo piso 2',
   2,
   1,
-  (SELECT id FROM "User" WHERE email = 'pedro.lopez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'pedro.lopez@gmail.com'),
   false,
   NOW() - INTERVAL '7 days',
   NOW()
 );
 
--- ADHESIONES A CLAIMS
-INSERT INTO "ClaimAdhesion" ("claimId", "userId", "adhesionType", "createdAt", "updatedAt") VALUES
-  (1, (SELECT id FROM "User" WHERE email = 'ana.martinez@email.com'), 'support', NOW(), NOW()),
-  (1, (SELECT id FROM "User" WHERE email = 'pedro.lopez@email.com'), 'support', NOW(), NOW()),
-  (2, (SELECT id FROM "User" WHERE email = 'maria.gonzalez@email.com'), 'support', NOW(), NOW());
+-- ADHESIONES A CLAIMS (ahora usa isSupport en lugar de adhesionType)
+INSERT INTO "ClaimAdhesion" ("claimId", "userId", "isSupport", "createdAt", "updatedAt") VALUES
+  (1, (SELECT id FROM "User" WHERE email = 'ana.martinez@gmail.com'), true, NOW(), NOW()),
+  (1, (SELECT id FROM "User" WHERE email = 'pedro.lopez@gmail.com'), true, NOW(), NOW()),
+  (2, (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com'), true, NOW(), NOW());
 
 -- RESERVAS DE EJEMPLO
 INSERT INTO "Reservation" ("userId", "amenityId", "startTime", "endTime", "statusId", "hiddenFromUser", "createdAt") 
 VALUES (
-  (SELECT id FROM "User" WHERE email = 'maria.gonzalez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com'),
   (SELECT id FROM "Amenity" WHERE name = 'Gimnasio'),
   (CURRENT_DATE + INTERVAL '1 day' + TIME '07:00:00')::timestamp,
   (CURRENT_DATE + INTERVAL '1 day' + TIME '08:00:00')::timestamp,
@@ -189,7 +219,7 @@ VALUES (
   NOW()
 ),
 (
-  (SELECT id FROM "User" WHERE email = 'ana.martinez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'ana.martinez@gmail.com'),
   (SELECT id FROM "Amenity" WHERE name = 'Piscina'),
   (CURRENT_DATE + INTERVAL '5 days' + TIME '10:00:00')::timestamp,
   (CURRENT_DATE + INTERVAL '5 days' + TIME '12:00:00')::timestamp,
@@ -198,7 +228,7 @@ VALUES (
   NOW()
 ),
 (
-  (SELECT id FROM "User" WHERE email = 'pedro.lopez@email.com'),
+  (SELECT id FROM "User" WHERE email = 'pedro.lopez@gmail.com'),
   (SELECT id FROM "Amenity" WHERE name = 'Salón de Eventos'),
   (CURRENT_DATE + INTERVAL '30 days' + TIME '18:00:00')::timestamp,
   (CURRENT_DATE + INTERVAL '30 days' + TIME '23:00:00')::timestamp,

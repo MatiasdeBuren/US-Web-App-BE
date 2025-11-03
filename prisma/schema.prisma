@@ -236,7 +236,6 @@ model AmenityRating {
   id               Int      @id @default(autoincrement())
   userId           Int
   amenityId        Int
-  reservationId    Int
   overallRating    Int
   cleanliness      Int?
   equipment        Int?
@@ -248,9 +247,8 @@ model AmenityRating {
   user             User     @relation("UserRatings", fields: [userId], references: [id], onDelete: Cascade)
   amenity          Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
   
-  @@unique([userId, reservationId])
+  @@unique([userId, amenityId])
   @@index([amenityId])
   @@index([userId])
-  @@index([reservationId])
   @@map("amenity_ratings")
 }

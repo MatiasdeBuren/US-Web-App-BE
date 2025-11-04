@@ -17,7 +17,8 @@ import {
   approveReservation,
   rejectReservation,
   getPendingReservations,
-  cancelReservationAsAdmin
+  cancelReservationAsAdmin,
+  getClaimsMonthlyStats
 } from "../controllers/adminController";
 import {
   getAdminClaims,
@@ -60,6 +61,7 @@ router.delete("/apartments/:id", validateAdmin, deleteApartment);
 
 
 router.get("/claims", validateAdmin, getAdminClaims);
+router.get("/claims/stats", validateAdmin, getClaimsMonthlyStats);
 router.put("/claims/:id/status", validateAdmin, updateClaimStatus);
 router.delete("/claims/:id", validateAdmin, deleteAdminClaim);
 

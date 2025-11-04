@@ -11,7 +11,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`📬 [ADMIN NOTIFICATIONS] Admin ${adminUser.email} requesting notifications`);
+    console.log(` [ADMIN NOTIFICATIONS] Admin ${adminUser.email} requesting notifications`);
 
     const notifications = await prisma.adminNotification.findMany({
       where: { adminId: adminUser.id },
@@ -69,7 +69,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
         };
       });
 
-    console.log(`✅ [ADMIN NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for admin ${adminUser.email}, ${unreadCount} unread`);
+    console.log(` [ADMIN NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for admin ${adminUser.email}, ${unreadCount} unread`);
 
     res.json({
       notifications: formattedNotifications,
@@ -77,7 +77,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [ADMIN NOTIFICATIONS ERROR]', error);
+    console.error(' [ADMIN NOTIFICATIONS ERROR]', error);
     res.status(500).json({ 
       message: "Error al obtener notificaciones" 
     });
@@ -100,7 +100,7 @@ export const markNotificationRead = async (req: Request, res: Response) => {
     }
 
     const notificationId = parseInt(id);
-    console.log(`📖 [MARK NOTIFICATION READ] Admin ${adminUser.email} marking notification ${id} as read`);
+    console.log(` [MARK NOTIFICATION READ] Admin ${adminUser.email} marking notification ${id} as read`);
 
     const existingNotification = await prisma.adminNotification.findFirst({
       where: {
@@ -130,7 +130,7 @@ export const markNotificationRead = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [MARK NOTIFICATION READ] Notification ${id} marked as read by admin ${adminUser.email}`);
+    console.log(` [MARK NOTIFICATION READ] Notification ${id} marked as read by admin ${adminUser.email}`);
 
     res.json({
       success: true,
@@ -138,7 +138,7 @@ export const markNotificationRead = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [MARK NOTIFICATION READ ERROR]', error);
+    console.error(' [MARK NOTIFICATION READ ERROR]', error);
     res.status(500).json({ 
       message: "Error al marcar notificación como leída" 
     });
@@ -155,7 +155,7 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`📖📖 [MARK ALL READ] Admin ${adminUser.email} marking all notifications as read`);
+    console.log(`[MARK ALL READ] Admin ${adminUser.email} marking all notifications as read`);
 
     const now = new Date();
     
@@ -171,7 +171,7 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [MARK ALL READ] ${updateResult.count} notifications marked as read by admin ${adminUser.email}`);
+    console.log(` [MARK ALL READ] ${updateResult.count} notifications marked as read by admin ${adminUser.email}`);
 
     res.json({
       success: true,
@@ -180,7 +180,7 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [MARK ALL READ ERROR]', error);
+    console.error(' [MARK ALL READ ERROR]', error);
     res.status(500).json({ 
       message: "Error al marcar todas las notificaciones como leídas" 
     });
@@ -197,7 +197,7 @@ export const getUserNotifications = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`📬 [USER NOTIFICATIONS] User ${user.email} requesting notifications`);
+    console.log(` [USER NOTIFICATIONS] User ${user.email} requesting notifications`);
 
     const notifications = await prisma.userNotification.findMany({
       where: { userId: user.id },
@@ -242,7 +242,7 @@ export const getUserNotifications = async (req: Request, res: Response) => {
       } : null
     }));
 
-    console.log(`✅ [USER NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for user ${user.email}, ${unreadCount} unread`);
+    console.log(` [USER NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for user ${user.email}, ${unreadCount} unread`);
 
     res.json({
       notifications: formattedNotifications,
@@ -250,7 +250,7 @@ export const getUserNotifications = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [USER NOTIFICATIONS ERROR]', error);
+    console.error(' [USER NOTIFICATIONS ERROR]', error);
     res.status(500).json({ 
       message: "Error al obtener notificaciones" 
     });
@@ -273,7 +273,7 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
     }
 
     const notificationId = parseInt(id);
-    console.log(`📖 [MARK USER NOTIFICATION READ] User ${user.email} marking notification ${id} as read`);
+    console.log(` [MARK USER NOTIFICATION READ] User ${user.email} marking notification ${id} as read`);
 
     const existingNotification = await prisma.userNotification.findFirst({
       where: {
@@ -303,7 +303,7 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
       }
     });
 
-    console.log(`✅ [MARK USER NOTIFICATION READ] Notification ${id} marked as read by user ${user.email}`);
+    console.log(` [MARK USER NOTIFICATION READ] Notification ${id} marked as read by user ${user.email}`);
 
     res.json({
       success: true,
@@ -311,7 +311,7 @@ export const markUserNotificationRead = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [MARK USER NOTIFICATION READ ERROR]', error);
+    console.error(' [MARK USER NOTIFICATION READ ERROR]', error);
     res.status(500).json({ 
       message: "Error al marcar notificación como leída" 
     });
@@ -328,7 +328,7 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
       });
     }
 
-    console.log(`📖📖 [MARK ALL USER NOTIFICATIONS READ] User ${user.email} marking all notifications as read`);
+    console.log(` [MARK ALL USER NOTIFICATIONS READ] User ${user.email} marking all notifications as read`);
 
     const now = new Date();
     
@@ -343,7 +343,7 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
       }
     });
 
-    console.log(`✅ [MARK ALL USER NOTIFICATIONS READ] ${updateResult.count} notifications marked as read by user ${user.email}`);
+    console.log(` [MARK ALL USER NOTIFICATIONS READ] ${updateResult.count} notifications marked as read by user ${user.email}`);
 
     res.json({
       success: true,
@@ -352,7 +352,7 @@ export const markAllUserNotificationsRead = async (req: Request, res: Response) 
     });
 
   } catch (error) {
-    console.error('❌ [MARK ALL USER NOTIFICATIONS READ ERROR]', error);
+    console.error(' [MARK ALL USER NOTIFICATIONS READ ERROR]', error);
     res.status(500).json({ 
       message: "Error al marcar todas las notificaciones como leídas" 
     });
@@ -375,7 +375,7 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
     }
 
     const notificationId = parseInt(id);
-    console.log(`🗑️ [DELETE USER NOTIFICATION] User ${user.email} deleting notification ${id}`);
+    console.log(` [DELETE USER NOTIFICATION] User ${user.email} deleting notification ${id}`);
 
     const existingNotification = await prisma.userNotification.findFirst({
       where: {
@@ -392,7 +392,7 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
       where: { id: notificationId }
     });
 
-    console.log(`✅ [DELETE USER NOTIFICATION] Notification ${id} deleted by user ${user.email}`);
+    console.log(` [DELETE USER NOTIFICATION] Notification ${id} deleted by user ${user.email}`);
 
     res.json({
       success: true,
@@ -400,7 +400,7 @@ export const deleteUserNotification = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('❌ [DELETE USER NOTIFICATION ERROR]', error);
+    console.error(' [DELETE USER NOTIFICATION ERROR]', error);
     res.status(500).json({ 
       message: "Error al eliminar notificación" 
     });

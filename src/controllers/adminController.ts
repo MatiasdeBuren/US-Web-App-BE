@@ -1677,22 +1677,32 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
 export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
-    const { period = 'weekly', weeks = '12', days = '30', months = '6' } = req.query;
+    const { period = 'weekly', offset = '0' } = req.query;
+    const offsetDays = parseInt(offset as string) || 0;
     
-    console.log(`[ADMIN CLAIMS STATS] User ${adminUser.email} requesting claims stats - period: ${period}`);
+    console.log(`[ADMIN CLAIMS STATS] User ${adminUser.email} requesting claims stats - period: ${period}, offset: ${offsetDays}`);
 
     let claims;
     let dataMap = new Map<string, any>();
     const now = new Date();
 
     if (period === 'daily') {
-      const daysCount = Math.min(parseInt(days as string) || 30, 90);
+      const daysCount = 7;
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - daysCount);
+      startDate.setDate(startDate.getDate() - daysCount - offsetDays);
       startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - offsetDays);
+      endDate.setHours(23, 59, 59, 999);
 
       claims = await prisma.claim.findMany({
-        where: { createdAt: { gte: startDate } },
+        where: { 
+          createdAt: { 
+            gte: startDate,
+            lte: endDate
+          } 
+        },
         select: {
           id: true,
           createdAt: true,
@@ -1702,7 +1712,7 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
       });
 
       for (let i = daysCount - 1; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const date = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - i);
         const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
         dataMap.set(key, {
           month: key,
@@ -1717,16 +1727,16 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
         if (dataMap.has(key)) {
           const data = dataMap.get(key);
           data.total++;
-          const statusName = claim.status.name.toLowerCase();
-          if (statusName === 'nuevo') data.nuevo++;
-          else if (statusName === 'en progreso') data.en_progreso++;
+          const statusName = claim.status.name;
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
           else if (statusName === 'resuelto') data.resuelto++;
-          else if (statusName === 'cerrado') data.cerrado++;
+          else if (statusName === 'rechazado') data.cerrado++;
         }
       });
 
     } else if (period === 'weekly') {
-      const weeksCount = Math.min(parseInt(weeks as string) || 12, 24);
+      const weeksCount = 4;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - (weeksCount * 7));
       startDate.setHours(0, 0, 0, 0);
@@ -1741,10 +1751,16 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
         orderBy: { createdAt: 'asc' }
       });
 
+      const getWeekKey = (date: Date) => {
+        const weekStart = new Date(date);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        return `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
+      };
+
       for (let i = weeksCount - 1; i >= 0; i--) {
-        const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
-        const key = `${weekStart.getFullYear()}-W${Math.ceil(weekStart.getDate() / 7)}`;
+        const weekDate = new Date(now);
+        weekDate.setDate(weekDate.getDate() - (i * 7));
+        const key = getWeekKey(weekDate);
         const label = `Sem ${weeksCount - i}`;
         dataMap.set(key, {
           month: key, label: label,
@@ -1754,22 +1770,21 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
 
       claims.forEach(claim => {
         const claimDate = new Date(claim.createdAt);
-        const weekStart = new Date(claimDate);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const key = `${weekStart.getFullYear()}-W${Math.ceil(weekStart.getDate() / 7)}`;
+        const key = getWeekKey(claimDate);
         if (dataMap.has(key)) {
           const data = dataMap.get(key);
           data.total++;
-          const statusName = claim.status.name.toLowerCase();
-          if (statusName === 'nuevo') data.nuevo++;
-          else if (statusName === 'en progreso') data.en_progreso++;
+          const statusName = claim.status.name;
+          console.log('[CLAIM STATUS]', { id: claim.id, statusName, key });
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
           else if (statusName === 'resuelto') data.resuelto++;
-          else if (statusName === 'cerrado') data.cerrado++;
+          else if (statusName === 'rechazado') data.cerrado++;
         }
       });
 
     } else {
-      const monthsCount = Math.min(parseInt(months as string) || 6, 24);
+      const monthsCount = 4;
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - monthsCount);
       startDate.setDate(1);
@@ -1801,11 +1816,11 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
         if (dataMap.has(key)) {
           const data = dataMap.get(key);
           data.total++;
-          const statusName = claim.status.name.toLowerCase();
-          if (statusName === 'nuevo') data.nuevo++;
-          else if (statusName === 'en progreso') data.en_progreso++;
+          const statusName = claim.status.name;
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
           else if (statusName === 'resuelto') data.resuelto++;
-          else if (statusName === 'cerrado') data.cerrado++;
+          else if (statusName === 'rechazado') data.cerrado++;
         }
       });
     }
@@ -1817,6 +1832,7 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
       data,
       totalClaims: claims?.length || 0,
       period,
+      offset: offsetDays,
       generatedAt: new Date().toISOString()
     });
 

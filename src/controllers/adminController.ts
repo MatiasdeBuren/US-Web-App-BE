@@ -1405,7 +1405,7 @@ export const approveReservation = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error("❌ [ADMIN APPROVE RESERVATION ERROR]", error);
+    console.error(" [ADMIN APPROVE RESERVATION ERROR]", error);
     res.status(500).json({ 
       message: "Error al aprobar la reserva" 
     });
@@ -1670,6 +1670,176 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
     console.error(" [ADMIN CANCEL RESERVATION ERROR]", error);
     res.status(500).json({ 
       message: "Error al cancelar la reserva" 
+    });
+  }
+};
+
+export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).user;
+    const { period = 'weekly', offset = '0' } = req.query;
+    const offsetDays = parseInt(offset as string) || 0;
+    
+    console.log(`[ADMIN CLAIMS STATS] User ${adminUser.email} requesting claims stats - period: ${period}, offset: ${offsetDays}`);
+
+    let claims;
+    let dataMap = new Map<string, any>();
+    const now = new Date();
+
+    if (period === 'daily') {
+      const daysCount = 7;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysCount - offsetDays);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - offsetDays);
+      endDate.setHours(23, 59, 59, 999);
+
+      claims = await prisma.claim.findMany({
+        where: { 
+          createdAt: { 
+            gte: startDate,
+            lte: endDate
+          } 
+        },
+        select: {
+          id: true,
+          createdAt: true,
+          status: { select: { name: true, label: true } }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      for (let i = daysCount - 1; i >= 0; i--) {
+        const date = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - i);
+        const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+        dataMap.set(key, {
+          month: key,
+          label: date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+          nuevo: 0, en_progreso: 0, resuelto: 0, cerrado: 0, total: 0
+        });
+      }
+
+      claims.forEach(claim => {
+        const claimDate = new Date(claim.createdAt);
+        const key = `${claimDate.getFullYear()}-${(claimDate.getMonth() + 1).toString().padStart(2, '0')}-${claimDate.getDate().toString().padStart(2, '0')}`;
+        if (dataMap.has(key)) {
+          const data = dataMap.get(key);
+          data.total++;
+          const statusName = claim.status.name;
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
+          else if (statusName === 'resuelto') data.resuelto++;
+          else if (statusName === 'rechazado') data.cerrado++;
+        }
+      });
+
+    } else if (period === 'weekly') {
+      const weeksCount = 4;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - (weeksCount * 7));
+      startDate.setHours(0, 0, 0, 0);
+
+      claims = await prisma.claim.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: {
+          id: true,
+          createdAt: true,
+          status: { select: { name: true, label: true } }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      const getWeekKey = (date: Date) => {
+        const weekStart = new Date(date);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        return `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
+      };
+
+      for (let i = weeksCount - 1; i >= 0; i--) {
+        const weekDate = new Date(now);
+        weekDate.setDate(weekDate.getDate() - (i * 7));
+        const key = getWeekKey(weekDate);
+        const label = `Sem ${weeksCount - i}`;
+        dataMap.set(key, {
+          month: key, label: label,
+          nuevo: 0, en_progreso: 0, resuelto: 0, cerrado: 0, total: 0
+        });
+      }
+
+      claims.forEach(claim => {
+        const claimDate = new Date(claim.createdAt);
+        const key = getWeekKey(claimDate);
+        if (dataMap.has(key)) {
+          const data = dataMap.get(key);
+          data.total++;
+          const statusName = claim.status.name;
+          console.log('[CLAIM STATUS]', { id: claim.id, statusName, key });
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
+          else if (statusName === 'resuelto') data.resuelto++;
+          else if (statusName === 'rechazado') data.cerrado++;
+        }
+      });
+
+    } else {
+      const monthsCount = 4;
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - monthsCount);
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+
+      claims = await prisma.claim.findMany({
+        where: { createdAt: { gte: startDate } },
+        select: {
+          id: true,
+          createdAt: true,
+          status: { select: { name: true, label: true } }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      for (let i = monthsCount - 1; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+        dataMap.set(key, {
+          month: key,
+          monthLabel: date.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }),
+          nuevo: 0, en_progreso: 0, resuelto: 0, cerrado: 0, total: 0
+        });
+      }
+
+      claims.forEach(claim => {
+        const claimDate = new Date(claim.createdAt);
+        const key = `${claimDate.getFullYear()}-${(claimDate.getMonth() + 1).toString().padStart(2, '0')}`;
+        if (dataMap.has(key)) {
+          const data = dataMap.get(key);
+          data.total++;
+          const statusName = claim.status.name;
+          if (statusName === 'pendiente') data.nuevo++;
+          else if (statusName === 'en_progreso') data.en_progreso++;
+          else if (statusName === 'resuelto') data.resuelto++;
+          else if (statusName === 'rechazado') data.cerrado++;
+        }
+      });
+    }
+
+    const data = Array.from(dataMap.values());
+    console.log(`[ADMIN CLAIMS STATS] Generated stats for ${data.length} periods`);
+
+    res.json({
+      data,
+      totalClaims: claims?.length || 0,
+      period,
+      offset: offsetDays,
+      generatedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("[ADMIN CLAIMS STATS ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al obtener estadísticas de reclamos" 
     });
   }
 };

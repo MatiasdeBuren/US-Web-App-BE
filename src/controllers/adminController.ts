@@ -1879,3 +1879,98 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getClaimsMetrics = async (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).user;
+    console.log(`[ADMIN CLAIMS METRICS] User ${adminUser.email} requesting claims metrics`);
+
+    const claims = await prisma.claim.findMany({
+      select: {
+        id: true,
+        subject: true,
+        createdAt: true,
+        updatedAt: true,
+        category: { 
+          select: { 
+            name: true, 
+            label: true 
+          } 
+        },
+        status: { 
+          select: { 
+            name: true, 
+            label: true 
+          } 
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const totalClaims = claims.length;
+
+    const resolvedClaims = claims.filter(c => 
+      c.status.name === 'resuelto' || c.status.name === 'rechazado'
+    );
+    
+    let averageResolutionTime = 0;
+    if (resolvedClaims.length > 0) {
+      const totalResolutionTime = resolvedClaims.reduce((sum, claim) => {
+        const createdAt = new Date(claim.createdAt);
+        const resolvedAt = new Date(claim.updatedAt);
+        const diffDays = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+        return sum + diffDays;
+      }, 0);
+      averageResolutionTime = totalResolutionTime / resolvedClaims.length;
+    }
+
+    const resolutionRate = totalClaims > 0 
+      ? (resolvedClaims.length / totalClaims) * 100 
+      : 0;
+
+    const categoryMap = new Map<string, number>();
+    claims.forEach(claim => {
+      const category = claim.category?.label || claim.category?.name || 'Sin categoría';
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+    });
+    
+    const byCategory = Array.from(categoryMap.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const statusMap = new Map<string, number>();
+    claims.forEach(claim => {
+      const status = claim.status.label || claim.status.name;
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+    });
+    
+    const byStatus = Array.from(statusMap.entries())
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const metrics = {
+      totalClaims,
+      averageResolutionTime,
+      resolutionRate,
+      byCategory,
+      byStatus,
+      generatedAt: new Date().toISOString()
+    };
+
+    console.log(`[ADMIN CLAIMS METRICS] Generated metrics:`, {
+      totalClaims,
+      avgResolutionDays: averageResolutionTime.toFixed(2),
+      resolutionRate: resolutionRate.toFixed(2),
+      categories: byCategory.length,
+      statuses: byStatus.length
+    });
+
+    res.json(metrics);
+
+  } catch (error) {
+    console.error("[ADMIN CLAIMS METRICS ERROR]", error);
+    res.status(500).json({ 
+      message: "Error al obtener métricas de reclamos" 
+    });
+  }
+};

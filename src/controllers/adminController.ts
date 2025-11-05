@@ -1737,12 +1737,21 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
 
     } else if (period === 'weekly') {
       const weeksCount = 4;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - (weeksCount * 7));
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - offsetDays);
+      endDate.setHours(23, 59, 59, 999);
+      
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - (weeksCount * 7) + 1);
       startDate.setHours(0, 0, 0, 0);
 
       claims = await prisma.claim.findMany({
-        where: { createdAt: { gte: startDate } },
+        where: { 
+          createdAt: { 
+            gte: startDate,
+            lte: endDate
+          } 
+        },
         select: {
           id: true,
           createdAt: true,
@@ -1751,31 +1760,44 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
         orderBy: { createdAt: 'asc' }
       });
 
-      const getWeekKey = (date: Date) => {
-        const weekStart = new Date(date);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        return `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
-      };
-
+      
+      const weekRanges: Array<{ key: string; weekStart: Date; weekEnd: Date }> = [];
+      
       for (let i = weeksCount - 1; i >= 0; i--) {
-        const weekDate = new Date(now);
-        weekDate.setDate(weekDate.getDate() - (i * 7));
-        const key = getWeekKey(weekDate);
+        const weekEnd = new Date(endDate);
+        weekEnd.setDate(weekEnd.getDate() - (i * 7));
+        weekEnd.setHours(23, 59, 59, 999);
+        
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 6);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        const key = `week-${i}-${weekStart.toISOString().split('T')[0]}`;
+        weekRanges.push({ key, weekStart, weekEnd });
+        
         const label = `Sem ${weeksCount - i}`;
         dataMap.set(key, {
-          month: key, label: label,
+          month: key, 
+          label: label,
+          weekStart: weekStart.toISOString().split('T')[0],
+          weekEnd: weekEnd.toISOString().split('T')[0],
           nuevo: 0, en_progreso: 0, resuelto: 0, cerrado: 0, total: 0
         });
       }
 
+      
       claims.forEach(claim => {
         const claimDate = new Date(claim.createdAt);
-        const key = getWeekKey(claimDate);
-        if (dataMap.has(key)) {
-          const data = dataMap.get(key);
+        
+       
+        const weekRange = weekRanges.find(range => 
+          claimDate >= range.weekStart && claimDate <= range.weekEnd
+        );
+        
+        if (weekRange && dataMap.has(weekRange.key)) {
+          const data = dataMap.get(weekRange.key);
           data.total++;
           const statusName = claim.status.name;
-          console.log('[CLAIM STATUS]', { id: claim.id, statusName, key });
           if (statusName === 'pendiente') data.nuevo++;
           else if (statusName === 'en_progreso') data.en_progreso++;
           else if (statusName === 'resuelto') data.resuelto++;
@@ -1784,14 +1806,28 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
       });
 
     } else {
-      const monthsCount = 4;
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - monthsCount);
+
+      const monthsCount = 12;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - offsetDays);
+      endDate.setMonth(endDate.getMonth());
+      endDate.setDate(1);
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(0); // Último día del mes
+      endDate.setHours(23, 59, 59, 999);
+      
+      const startDate = new Date(endDate);
+      startDate.setMonth(startDate.getMonth() - monthsCount + 1);
       startDate.setDate(1);
       startDate.setHours(0, 0, 0, 0);
 
       claims = await prisma.claim.findMany({
-        where: { createdAt: { gte: startDate } },
+        where: { 
+          createdAt: { 
+            gte: startDate,
+            lte: endDate
+          } 
+        },
         select: {
           id: true,
           createdAt: true,
@@ -1801,7 +1837,7 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
       });
 
       for (let i = monthsCount - 1; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const date = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
         const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
         dataMap.set(key, {
           month: key,

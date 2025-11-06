@@ -826,7 +826,6 @@ export const updateApartment = async (req: Request, res: Response) => {
 
     if (tenantId !== undefined) {
       if (tenantId === null) {
-        // Desconectar tenant actual
         const currentTenant = existingApartment.tenants[0];
         if (currentTenant) {
           updateData.tenants = { disconnect: { id: currentTenant.id } };
@@ -964,7 +963,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
     const assignedUsers = apartment.tenants.length + (apartment.owner ? 1 : 0);
     
     if (assignedUsers > 0) {
-      console.log(`🚨 [ADMIN DELETE APARTMENT] Cannot delete apartment ${id}: has assigned users`);
+      console.log(` [ADMIN DELETE APARTMENT] Cannot delete apartment ${id}: has assigned users`);
       return res.status(400).json({ 
         error: "Cannot delete apartment: has assigned users",
         details: {
@@ -987,7 +986,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
     });
 
     if (activeReservations > 0) {
-      console.log(`🚨 [ADMIN DELETE APARTMENT] Cannot delete apartment ${id}: has active reservations`);
+      console.log(` [ADMIN DELETE APARTMENT] Cannot delete apartment ${id}: has active reservations`);
       return res.status(400).json({ 
         error: "Cannot delete apartment: has active reservations",
         details: {
@@ -1117,14 +1116,12 @@ export const deleteAmenity = async (req: Request, res: Response) => {
       });
     }
 
-    // (activas e históricas)
     const allReservations = await prisma.reservation.count({
       where: {
         amenityId: amenityId
       }
     });
 
-    // Contar solo las reservas activas
     const activeReservations = await prisma.reservation.count({
       where: {
         amenityId: amenityId,
@@ -1496,7 +1493,7 @@ export const rejectReservation = async (req: Request, res: Response) => {
       reservation.amenity.name,
       reservation.startTime,
       reservation.endTime,
-      reason // Pasar la razón al email
+      reason
     ).catch(err => console.error('Error sending rejection email:', err));
 
     console.log(` [ADMIN REJECT RESERVATION] Reservation ${id} rejected successfully`);
@@ -1883,9 +1880,31 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
 export const getClaimsMetrics = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
-    console.log(`[ADMIN CLAIMS METRICS] User ${adminUser.email} requesting claims metrics`);
+    const { startDate, endDate } = req.query;
+    
+    console.log(`[ADMIN CLAIMS METRICS] User ${adminUser.email} requesting claims metrics`, {
+      startDate,
+      endDate
+    });
+
+    const whereClause: any = {};
+    
+    if (startDate || endDate) {
+      whereClause.status = {
+        name: 'resuelto'
+      };
+      
+      whereClause.updatedAt = {};
+      if (startDate) {
+        whereClause.updatedAt.gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        whereClause.updatedAt.lte = new Date(endDate as string);
+      }
+    }
 
     const claims = await prisma.claim.findMany({
+      where: whereClause,
       select: {
         id: true,
         subject: true,
@@ -1909,21 +1928,21 @@ export const getClaimsMetrics = async (req: Request, res: Response) => {
 
     const totalClaims = claims.length;
 
-    const resolvedClaims = claims.filter(c => 
-      c.status.name === 'resuelto' || c.status.name === 'rechazado'
-    );
+    // For average resolution time, ONLY count resolved claims (estado: "resuelto")
+    const resolvedClaims = claims.filter(c => c.status.name === 'resuelto');
     
     let averageResolutionTime = 0;
     if (resolvedClaims.length > 0) {
       const totalResolutionTime = resolvedClaims.reduce((sum, claim) => {
         const createdAt = new Date(claim.createdAt);
-        const resolvedAt = new Date(claim.updatedAt);
+        const resolvedAt = new Date(claim.updatedAt); // Approximation: last update as resolution date
         const diffDays = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
         return sum + diffDays;
       }, 0);
       averageResolutionTime = totalResolutionTime / resolvedClaims.length;
     }
 
+    // Resolution rate: percentage of resolved claims vs total claims
     const resolutionRate = totalClaims > 0 
       ? (resolvedClaims.length / totalClaims) * 100 
       : 0;
@@ -1954,6 +1973,11 @@ export const getClaimsMetrics = async (req: Request, res: Response) => {
       resolutionRate,
       byCategory,
       byStatus,
+      dateFilter: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+        applied: !!(startDate || endDate)
+      },
       generatedAt: new Date().toISOString()
     };
 
@@ -1962,7 +1986,8 @@ export const getClaimsMetrics = async (req: Request, res: Response) => {
       avgResolutionDays: averageResolutionTime.toFixed(2),
       resolutionRate: resolutionRate.toFixed(2),
       categories: byCategory.length,
-      statuses: byStatus.length
+      statuses: byStatus.length,
+      dateFilterApplied: !!(startDate || endDate)
     });
 
     res.json(metrics);

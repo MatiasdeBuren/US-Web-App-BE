@@ -1928,21 +1928,19 @@ export const getClaimsMetrics = async (req: Request, res: Response) => {
 
     const totalClaims = claims.length;
 
-    // For average resolution time, ONLY count resolved claims (estado: "resuelto")
     const resolvedClaims = claims.filter(c => c.status.name === 'resuelto');
     
     let averageResolutionTime = 0;
     if (resolvedClaims.length > 0) {
       const totalResolutionTime = resolvedClaims.reduce((sum, claim) => {
         const createdAt = new Date(claim.createdAt);
-        const resolvedAt = new Date(claim.updatedAt); // Approximation: last update as resolution date
+        const resolvedAt = new Date(claim.updatedAt);
         const diffDays = (resolvedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
         return sum + diffDays;
       }, 0);
       averageResolutionTime = totalResolutionTime / resolvedClaims.length;
     }
 
-    // Resolution rate: percentage of resolved claims vs total claims
     const resolutionRate = totalClaims > 0 
       ? (resolvedClaims.length / totalClaims) * 100 
       : 0;

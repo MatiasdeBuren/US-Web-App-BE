@@ -5,13 +5,13 @@ import {
   getAllUsers,
   updateUserRole,
   getAllReservations,
+  getAllAmenities,
   createAmenity,
   updateAmenity,
   getAllApartments,
   createApartment,
   updateApartment,
   deleteApartment,
-  getAllAmenities,
   deleteAmenity,
   getAmenityDetailReservations,
   approveReservation,
@@ -20,7 +20,7 @@ import {
   cancelReservationAsAdmin,
   getClaimsMonthlyStats,
   getClaimsMetrics
-} from "../controllers/adminController";
+} from "../controllers/admin";
 import {
   getAdminClaims,
   updateClaimStatus,

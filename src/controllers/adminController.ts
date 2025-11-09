@@ -212,7 +212,9 @@ export const getAllReservations = async (req: Request, res: Response) => {
             id: true,
             name: true,
             capacity: true,
-            maxDuration: true
+            maxDuration: true,
+            openTime: true,
+            closeTime: true
           }
         },
         status: true
@@ -1025,7 +1027,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
 export const getAllAmenities = async (req: Request, res: Response) => {
   try {
     const adminUser = (req as any).user;
-    console.log(`🏊 [ADMIN AMENITIES] User ${adminUser.email} requesting all amenities`);
+    console.log(` [ADMIN AMENITIES] User ${adminUser.email} requesting all amenities`);
 
     const amenities = await prisma.amenity.findMany({
       include: {
@@ -1572,7 +1574,7 @@ export const cancelReservationAsAdmin = async (req: Request, res: Response) => {
     const { reason } = req.body;
     const adminUser = (req as any).user;
 
-    console.log(`🗑️ [ADMIN CANCEL RESERVATION] Admin ${adminUser.email} cancelling reservation ${id}`);
+    console.log(`[ADMIN CANCEL RESERVATION] Admin ${adminUser.email} cancelling reservation ${id}`);
 
     const reservationId = parseInt(id || "");
     if (isNaN(reservationId)) {

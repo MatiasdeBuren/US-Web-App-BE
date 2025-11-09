@@ -11,7 +11,6 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
 
     let claims;
     let dataMap = new Map<string, any>();
-    const now = new Date();
 
     if (period === 'daily') {
       const daysCount = 7;
@@ -137,7 +136,7 @@ export const getClaimsMonthlyStats = async (req: Request, res: Response) => {
       endDate.setMonth(endDate.getMonth());
       endDate.setDate(1);
       endDate.setMonth(endDate.getMonth() + 1);
-      endDate.setDate(0); // Último día del mes
+      endDate.setDate(0);
       endDate.setHours(23, 59, 59, 999);
       
       const startDate = new Date(endDate);

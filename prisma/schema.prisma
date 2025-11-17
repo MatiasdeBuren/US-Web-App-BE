@@ -257,7 +257,6 @@ model AmenityRating {
 model GamificationLevel {
   id              Int      @id @default(autoincrement())
   key             String   @unique // "bronce", "plata", "oro", "platino", "diamante"
-  name            String   // "Bronce", "Plata", "Oro", "Platino", "Diamante"
   displayName     String   // "Nuevo Vecino", "Buen Vecino", "Gran Vecino", etc.
   minPoints       Int      // Puntos mínimos para alcanzar este nivel
   maxPoints       Int?     // null para el nivel más alto
@@ -271,6 +270,7 @@ model GamificationLevel {
   themes          GamificationTheme[] @relation("ThemeRequiredLevel")
   frames          GamificationFrame[] @relation("FrameRequiredLevel")
   effects         GamificationEffect[] @relation("EffectRequiredLevel")
+  titles          GamificationTitle[] @relation("TitleRequiredLevel")
   
   @@index([key])
   @@index([order])
@@ -280,7 +280,7 @@ model GamificationLevel {
 model GamificationTheme {
   id              Int      @id @default(autoincrement())
   key             String   @unique // "default", "sunset", "ocean", "forest", etc.
-  name            String   // "Predeterminado", "Atardecer", "Océano", etc.
+  displayName     String   // "Predeterminado", "Atardecer", "Océano", etc.
   primaryColor    String   
   secondaryColor  String   
   gradient        String?  
@@ -299,7 +299,7 @@ model GamificationTheme {
 model GamificationFrame {
   id              Int      @id @default(autoincrement())
   key             String   @unique // "none", "silver", "gold", "platinum", "diamond", "legendary"
-  name            String   // "Sin Marco", "Marco Plateado", etc.
+  displayName     String   // "Sin Marco", "Marco Plateado", etc.
   cssClass        String   
   animation       String?  
   requiredLevelId Int      // Nivel mínimo requerido
@@ -317,7 +317,7 @@ model GamificationFrame {
 model GamificationEffect {
   id              Int      @id @default(autoincrement())
   key             String   @unique // "none", "shimmer", "glow", "sparkle", "holographic", "rainbow", "trail"
-  name            String   // "Sin Efecto", "Brillo", "Resplandor", etc.
+  displayName     String   // "Sin Efecto", "Brillo", "Resplandor", etc.
   cssClass        String   
   animation       String?  
   requiredLevelId Int      // Nivel mínimo requerido
@@ -332,10 +332,26 @@ model GamificationEffect {
   @@map("gamification_effects")
 }
 
+model GamificationTitle {
+  id              Int      @id @default(autoincrement())
+  key             String   @unique // "novato", "vecino_activo", "guardian_comunitario", "leyenda_urbana", "custom"
+  displayName     String   // "Novato", "Vecino Activo", "Guardián Comunitario", etc.
+  description     String?  // Descripción de cómo se obtiene el título
+  requiredLevelId Int      // Nivel mínimo requerido
+  requiredLevel   GamificationLevel @relation("TitleRequiredLevel", fields: [requiredLevelId], references: [id])
+  isActive        Boolean  @default(true)  // Permite desactivar títulos temporalmente
+  
+  users           UserGamification[] @relation("UserTitle")
+  
+  @@index([key])
+  @@index([requiredLevelId])
+  @@map("gamification_titles")
+}
+
 model AchievementCategory {
   id           Int      @id @default(autoincrement())
   key          String   @unique // "reservations", "social", "ratings", "claims"
-  name         String   // "Reservas", "Social", "Calificaciones", "Reclamos"
+  displayName  String   // "Reservas", "Social", "Calificaciones", "Reclamos"
   description  String?
   icon         String   
   color        String   
@@ -350,7 +366,7 @@ model AchievementCategory {
 model AchievementRarity {
   id           Int      @id @default(autoincrement())
   key          String   @unique // "common", "rare", "epic", "legendary"
-  name         String   // "Común", "Raro", "Épico", "Legendario"
+  displayName  String   // "Común", "Raro", "Épico", "Legendario"
   color        String   
   glowEffect   String?  
   order        Int      @default(0)
@@ -378,8 +394,9 @@ model UserGamification {
   selectedEffectId  Int      @default(1) 
   selectedEffect    GamificationEffect @relation("UserEffect", fields: [selectedEffectId], references: [id])
   
-  selectedTitle     String?
-  customTitle       String?  // Solo para diamante
+  selectedTitleId   Int?     
+  selectedTitle     GamificationTitle? @relation("UserTitle", fields: [selectedTitleId], references: [id])
+  customTitleText   String?  // Solo para título "custom" (nivel diamante)
   
   // Estadísticas para achievements
   reservationsCompleted  Int  @default(0)
@@ -390,7 +407,7 @@ model UserGamification {
   claimsRejected        Int  @default(0)
   adhesionsGiven        Int  @default(0)
   adhesionsReceived     Int  @default(0)
-  negativeAdhesions     Int  @default(0) // "No adhiero" recibidos
+  negativeAdhesions     Int  @default(0)  // Adhesiones negativas recibidas (isSupport=false)
   consecutiveDays       Int  @default(0)
   lastLoginDate         DateTime?
   
@@ -428,7 +445,7 @@ model PointTransaction {
 model Achievement {
   id          Int      @id @default(autoincrement())
   key         String   @unique // "first_reservation", "week_streak", "rating_master"
-  name        String   // "Primera Reserva"
+  displayName String   // "Primera Reserva"
   description String   
   icon        String  
   categoryId  Int

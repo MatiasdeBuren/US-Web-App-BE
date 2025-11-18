@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 import { emailService } from "../services/emailService";
+import { awardPoints, updateUserStats } from "./gamificationController";
 
 export const createReservation = async (req: Request, res: Response) => {
   try {
@@ -216,6 +217,13 @@ export const createReservation = async (req: Request, res: Response) => {
         start,
         end
       ).catch(err => console.error('Error sending confirmation email:', err));
+      
+      // Otorgar puntos por reserva completada (solo si es auto-confirmada)
+      awardPoints(userId, "RESERVATION_COMPLETED", { reservationId: reservation.id })
+        .catch(err => console.error('Error awarding points:', err));
+      
+      updateUserStats(userId, 'reservationsCompleted')
+        .catch(err => console.error('Error updating stats:', err));
     }
 
     res.json(reservation);
@@ -288,6 +296,13 @@ export const cancelReservation = async (req: Request, res: Response) => {
       reservation.startTime,
       reservation.endTime
     ).catch(err => console.error('Error sending cancellation email:', err));
+    
+    // Penalizar por cancelación
+    awardPoints(userId, "RESERVATION_CANCELLED", { reservationId: reservation.id })
+      .catch(err => console.error('Error deducting points:', err));
+    
+    updateUserStats(userId, 'reservationsCancelled')
+      .catch(err => console.error('Error updating stats:', err));
 
     res.json(cancelled);
   } catch (error) {

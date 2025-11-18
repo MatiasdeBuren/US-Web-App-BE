@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
+import { awardPoints, updateUserStats } from './gamificationController';
 
 
 const parsePaginationParams = (page?: string, limit?: string) => {
@@ -389,6 +390,12 @@ export const createClaim = async (req: Request, res: Response) => {
 
         return claim;
       });
+      
+      awardPoints(userId, "CLAIM_CREATED", { claimId: result.id })
+        .catch(err => console.error('Error awarding points:', err));
+      
+      updateUserStats(userId, 'claimsCreated')
+        .catch(err => console.error('Error updating stats:', err));
 
       const mappedClaim = await mapClaimWithCreatedBy(result, (req as any).user);
       res.status(201).json(mappedClaim);
@@ -600,6 +607,21 @@ export const updateClaimStatus = async (req: Request, res: Response) => {
           status: true
         }
       });
+      
+
+      if (statusRecord.name === 'resuelto') {
+        awardPoints(updatedClaim.userId, "CLAIM_RESOLVED", { claimId: updatedClaim.id })
+          .catch(err => console.error('Error awarding points:', err));
+        
+        updateUserStats(updatedClaim.userId, 'claimsResolved')
+          .catch(err => console.error('Error updating stats:', err));
+      } else if (statusRecord.name === 'rechazado') {
+        awardPoints(updatedClaim.userId, "CLAIM_REJECTED", { claimId: updatedClaim.id })
+          .catch(err => console.error('Error deducting points:', err));
+        
+        updateUserStats(updatedClaim.userId, 'claimsRejected')
+          .catch(err => console.error('Error updating stats:', err));
+      }
 
       const mappedUpdatedClaim = await mapClaimWithCreatedBy(updatedClaim, (req as any).user);
       res.json(mappedUpdatedClaim);

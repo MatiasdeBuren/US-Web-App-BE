@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { emailService } from "../services/emailService";
+import { initializeUserGamification, updateDailyStreak } from "./gamificationController";
 
 
 // POST /register
@@ -18,13 +19,16 @@ export const register = async (req: Request, res: Response) => {
     if (userExists) return res.status(400).json({ message: "El usuario ya existe" });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({
+    const newUser = await prisma.user.create({
       data: {
         name,
         email,
         password: passwordHash
       }
     });
+    
+    initializeUserGamification(newUser.id)
+      .catch(err => console.error('Error initializing gamification:', err));
 
     res.status(201).json({ message: "Usuario registrado con éxito" });
     } catch (error) {
@@ -51,6 +55,10 @@ export const login = async (req: Request, res: Response) => {
     process.env.JWT_SECRET!, // must be set in .env
     { expiresIn: "120m" }
   );
+  
+
+  updateDailyStreak(user.id)
+    .catch(err => console.error('Error updating daily streak:', err));
 
   res.json({ message: "Login successful", token });
 };

@@ -7,7 +7,7 @@ import {
   updateCustomization,
   getPointTransactions
 } from "../controllers/gamificationController";
-import { authenticateToken } from "../auth_middleware";
+import { requireAuth } from "../auth_middleware";
 
 const router = Router();
 
@@ -18,7 +18,7 @@ router.get("/achievements", getAllAchievements);
 router.get("/transactions/:userId", getPointTransactions);
 
 // Rutas protegidas que requieren autenticación
-router.get("/customization/:userId", authenticateToken, getCustomizationOptions);
-router.put("/customize", authenticateToken, updateCustomization);
+router.get("/customization/:userId", requireAuth, getCustomizationOptions);
+router.put("/customize", requireAuth, updateCustomization);
 
 export default router;

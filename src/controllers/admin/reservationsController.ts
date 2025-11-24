@@ -1,6 +1,7 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { prisma } from "../../prismaClient";
 import { emailService } from "../../services/emailService";
+import { awardPoints, updateUserStats } from "../gamificationController";
 
 export const getAllReservations = async (req: Request, res: Response) => {
   try {
@@ -206,6 +207,13 @@ export const approveReservation = async (req: Request, res: Response) => {
       reservation.startTime,
       reservation.endTime
     ).catch(err => console.error('Error sending approval email:', err));
+    
+
+    awardPoints(reservation.user.id, "RESERVATION_COMPLETED", { reservationId: reservationId })
+      .catch(err => console.error('Error awarding points:', err));
+    
+    updateUserStats(reservation.user.id, 'reservationsCompleted')
+      .catch(err => console.error('Error updating stats:', err));
 
     console.log(` [ADMIN APPROVE RESERVATION] Reservation ${id} approved successfully`);
 

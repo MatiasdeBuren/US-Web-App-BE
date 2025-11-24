@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
+import { awardPoints, updateUserStats } from "./gamificationController";
 
 // GET /claims/:id/adhesions 
 export const getClaimAdhesions = async (req: Request, res: Response) => {
@@ -120,6 +121,30 @@ export const createOrUpdateClaimAdhesion = async (req: Request, res: Response) =
     const adhesionTypeStr = adhesion_type ? 'support' : 'disagree';
     
     console.log(`[CLAIM ADHESION] User ${userEmail} ${action} adhesión '${adhesionTypeStr}' to claim ${claimId}`);
+    
+
+    if (action === "creada") {
+      awardPoints(userId, "ADHESION_GIVEN", { claimId })
+        .catch(err => console.error('Error awarding points:', err));
+      
+      updateUserStats(userId, 'adhesionsGiven')
+        .catch(err => console.error('Error updating stats:', err));
+      
+
+      if (adhesion_type) {
+        awardPoints(claim.userId, "ADHESION_RECEIVED", { claimId })
+          .catch(err => console.error('Error awarding points to claim owner:', err));
+        
+        updateUserStats(claim.userId, 'adhesionsReceived')
+          .catch(err => console.error('Error updating stats:', err));
+      } else {
+        awardPoints(claim.userId, "NEGATIVE_ADHESION_RECEIVED", { claimId })
+          .catch(err => console.error('Error deducting points from claim owner:', err));
+        
+        updateUserStats(claim.userId, 'negativeAdhesions')
+          .catch(err => console.error('Error updating stats:', err));
+      }
+    }
 
     res.status(200).json({
       message: `Adhesión ${action}`,

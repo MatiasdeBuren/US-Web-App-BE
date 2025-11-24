@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prismaClient';
+import { awardPoints, updateUserStats } from './gamificationController';
 
 interface AuthRequest extends Request {
     user?: {
@@ -81,6 +82,12 @@ export const createRating = async (req: AuthRequest, res: Response): Promise<voi
                 }
             }
         });
+
+        awardPoints(userId, "RATING_GIVEN", { ratingId: rating.id })
+            .catch(err => console.error('Error awarding points:', err));
+        
+        updateUserStats(userId, 'ratingsGiven')
+            .catch(err => console.error('Error updating stats:', err));
 
         res.status(201).json(rating);
     } catch (error) {

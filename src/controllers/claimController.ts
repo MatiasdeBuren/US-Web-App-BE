@@ -678,3 +678,51 @@ export const deleteAdminClaim = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
+
+
+export const linkClaimToProjectFlowTask = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!checkAdminPermissions(user, res)) return;
+
+    const { id } = req.params;
+    const { projectFlowTaskId } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ message: "ID del reclamo es requerido" });
+    }
+
+    if (!projectFlowTaskId) {
+      return res.status(400).json({ message: "ID de tarea de ProjectFlow es requerido" });
+    }
+
+    const existingClaim = await prisma.claim.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingClaim) {
+      return res.status(404).json({ message: "Reclamo no encontrado" });
+    }
+
+    const updatedClaim = await prisma.claim.update({
+      where: { id: parseInt(id) },
+      data: {
+        projectFlowTaskId
+      },
+      include: {
+        user: true,
+        category: true,
+        priority: true,
+        status: true,
+        adhesions: true
+      }
+    });
+
+    const mappedClaim = await mapClaimWithCreatedBy(updatedClaim, user);
+    res.json(mappedClaim);
+
+  } catch (error) {
+    console.error('Error al vincular reclamo con ProjectFlow:', error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};

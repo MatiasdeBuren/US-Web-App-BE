@@ -11,7 +11,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(` [ADMIN NOTIFICATIONS] Admin ${adminUser.email} requesting notifications`);
+
 
     const notifications = await prisma.adminNotification.findMany({
       where: { adminId: adminUser.id },
@@ -69,7 +69,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
         };
       });
 
-    console.log(` [ADMIN NOTIFICATIONS] Retrieved ${formattedNotifications.length} notifications for admin ${adminUser.email}, ${unreadCount} unread`);
+    
 
     res.json({
       notifications: formattedNotifications,

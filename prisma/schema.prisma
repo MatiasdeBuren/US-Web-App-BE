@@ -135,6 +135,8 @@ model Claim {
   adminNotes  String?
   isAnonymous Boolean  @default(false)
   
+  projectFlowTaskId String? 
+  
   userId      Int
   user        User     @relation("UserClaims", fields: [userId], references: [id])
   adhesions   ClaimAdhesion[] @relation("ClaimAdhesions")
@@ -147,6 +149,7 @@ model Claim {
   @@index([statusId])
   @@index([categoryId])
   @@index([priorityId])
+  @@index([projectFlowTaskId])
 }
 
 model ClaimAdhesion {

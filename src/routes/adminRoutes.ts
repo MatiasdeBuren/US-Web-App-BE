@@ -24,7 +24,8 @@ import {
 import {
   getAdminClaims,
   updateClaimStatus,
-  deleteAdminClaim
+  deleteAdminClaim,
+  linkClaimToProjectFlowTask
 } from "../controllers/claimController";
 import {
   getAdminNotifications,
@@ -65,6 +66,7 @@ router.get("/claims", validateAdmin, getAdminClaims);
 router.get("/claims/stats", validateAdmin, getClaimsMonthlyStats);
 router.get("/claims/metrics", validateAdmin, getClaimsMetrics);
 router.put("/claims/:id/status", validateAdmin, updateClaimStatus);
+router.put("/claims/:id/projectflow-task", validateAdmin, linkClaimToProjectFlowTask);
 router.delete("/claims/:id", validateAdmin, deleteAdminClaim);
 
 

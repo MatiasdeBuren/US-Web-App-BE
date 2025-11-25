@@ -4,7 +4,6 @@ const PROJECT_FLOW_API = "http://apiprojectflow.semantic.com.ar";
 const PROJECT_FLOW_EMAIL = "US_Admin@gmail.com";
 const PROJECT_FLOW_PASSWORD = "SoTheGoodPassword123!";
 
-// Store the session cookie in memory (in production, use Redis or similar)
 let cachedCookie: string | null = null;
 let tokenExpiry: number = 0;
 
@@ -48,10 +47,6 @@ async function getProjectFlowCookie(): Promise<string> {
   }
 }
 
-/**
- * GET /api/projectflow/tasks
- * Get all owned tasks
- */
 export async function getTasks(req: Request, res: Response) {
   try {
     const cookie = await getProjectFlowCookie();
@@ -81,10 +76,6 @@ export async function getTasks(req: Request, res: Response) {
   }
 }
 
-/**
- * GET /api/projectflow/tasks/:taskId
- * Get specific task by ID
- */
 export async function getTask(req: Request, res: Response) {
   try {
     const { taskId } = req.params;
@@ -115,10 +106,6 @@ export async function getTask(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/projectflow/tasks
- * Create a new task
- */
 export async function createTask(req: Request, res: Response) {
   try {
     const { title, description, deadline } = req.body;
@@ -168,10 +155,6 @@ export async function createTask(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/projectflow/tasks/:taskId/subtasks
- * Create a subtask under a parent task
- */
 export async function createSubTask(req: Request, res: Response) {
   try {
     const { taskId } = req.params;
@@ -218,10 +201,6 @@ export async function createSubTask(req: Request, res: Response) {
   }
 }
 
-/**
- * PUT /api/projectflow/tasks/:taskId
- * Update a task
- */
 export async function updateTask(req: Request, res: Response) {
   try {
     const { taskId } = req.params;
@@ -254,10 +233,6 @@ export async function updateTask(req: Request, res: Response) {
   }
 }
 
-/**
- * DELETE /api/projectflow/tasks/:taskId
- * Delete a task
- */
 export async function deleteTask(req: Request, res: Response) {
   try {
     const { taskId } = req.params;

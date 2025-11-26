@@ -249,19 +249,10 @@ async function checkAchievementRequirement(
       return userGamification.reservationsCompleted >= (requiredCount || 1);
     
     case "reservation_streak":
-
-      return await checkReservationStreak(userId, requiredCount || 5);
+      return userGamification.reservationsCompleted >= (requiredCount || 5);
     
     case "complete_reservations":
       return userGamification.reservationsCompleted >= (requiredCount || 50);
-    
-    case "early_reservation":
-
-      return false;
-    
-    case "night_reservation":
-
-      return false;
 
     // === RATINGS ===
     case "give_rating":
@@ -293,9 +284,6 @@ async function checkAchievementRequirement(
     
     case "early_adopter":
       return await checkEarlyAdopter(userId);
-    
-    case "complete_profile":
-      return await checkProfileComplete(userId);
 
     default:
       console.warn(`Achievement action desconocida: ${requiredAction}`);
@@ -365,27 +353,6 @@ async function unlockAchievement(
   } catch (error) {
     console.error(`Error desbloqueando achievement ${achievement.key}:`, error);
   }
-}
-
-
-async function checkReservationStreak(userId: number, required: number): Promise<boolean> {
-  const reservations = await prisma.reservation.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: required,
-    select: { 
-      status: {
-        select: {
-          name: true
-        }
-      }
-    }
-  });
-
-  if (reservations.length < required) return false;
-
-
-  return reservations.every(r => r.status.name === 'finalizada');
 }
 
 

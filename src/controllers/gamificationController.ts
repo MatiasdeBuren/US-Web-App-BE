@@ -138,7 +138,6 @@ export async function addPoints(
 
     await checkAndUpdateLevel(userId);
 
-    await checkAchievements(userId, action);
 
     return updatedGamification;
   } catch (error) {
@@ -190,10 +189,18 @@ async function checkAndUpdateLevel(userId: number) {
 }
 
 
+
 async function checkAchievements(userId: number, action: PointAction) {
   try {
     const userGamification = await prisma.userGamification.findUnique({
-      where: { userId }
+      where: { userId },
+      include: {
+        achievements: {
+          include: {
+            achievement: true
+          }
+        }
+      }
     });
 
     if (!userGamification) return;
@@ -205,122 +212,205 @@ async function checkAchievements(userId: number, action: PointAction) {
 
     for (const achievement of achievements) {
 
-      const hasAchievement = await prisma.userAchievement.findUnique({
-        where: {
-          userId_achievementId: {
-            userId,
-            achievementId: achievement.id
-          }
-        }
-      });
-
+      const hasAchievement = userGamification.achievements.find(
+        ua => ua.achievementId === achievement.id
+      );
 
       if (hasAchievement && !achievement.isRepeatable) continue;
 
 
-      let shouldUnlock = false;
-
-      if (achievement.requiredAction) {
-
-        switch (achievement.requiredAction) {
-          case "complete_1_reservation":
-            shouldUnlock = userGamification.reservationsCompleted >= 1;
-            break;
-          case "complete_5_reservations":
-            shouldUnlock = userGamification.reservationsCompleted >= 5;
-            break;
-          case "complete_10_reservations":
-            shouldUnlock = userGamification.reservationsCompleted >= 10;
-            break;
-          case "give_1_rating":
-            shouldUnlock = userGamification.ratingsGiven >= 1;
-            break;
-          case "give_5_ratings":
-            shouldUnlock = userGamification.ratingsGiven >= 5;
-            break;
-          case "create_1_claim":
-            shouldUnlock = userGamification.claimsCreated >= 1;
-            break;
-          case "create_5_claims":
-            shouldUnlock = userGamification.claimsCreated >= 5;
-            break;
-          case "resolve_1_claim":
-            shouldUnlock = userGamification.claimsResolved >= 1;
-            break;
-          case "streak_7_days":
-            shouldUnlock = userGamification.consecutiveDays >= 7;
-            break;
-          case "streak_30_days":
-            shouldUnlock = userGamification.consecutiveDays >= 30;
-            break;
-          case "reach_100_points":
-            shouldUnlock = userGamification.totalPoints >= 100;
-            break;
-          case "reach_500_points":
-            shouldUnlock = userGamification.totalPoints >= 500;
-            break;
-          case "reach_1000_points":
-            shouldUnlock = userGamification.totalPoints >= 1000;
-            break;
-        }
-      }
-
+      const shouldUnlock = await checkAchievementRequirement(
+        achievement,
+        userGamification,
+        userId
+      );
 
       if (shouldUnlock) {
-        if (hasAchievement && achievement.isRepeatable) {
-          await prisma.userAchievement.update({
-            where: {
-              userId_achievementId: {
-                userId,
-                achievementId: achievement.id
-              }
-            },
-            data: {
-              timesEarned: {
-                increment: 1
-              }
-            }
-          });
-        } else if (!hasAchievement) {
-
-          await prisma.userAchievement.create({
-            data: {
-              userId,
-              achievementId: achievement.id,
-              timesEarned: 1
-            }
-          });
-
-
-          if (achievement.pointsReward > 0) {
-            await prisma.userGamification.update({
-              where: { userId },
-              data: {
-                totalPoints: {
-                  increment: achievement.pointsReward
-                }
-              }
-            });
-
-            await prisma.pointTransaction.create({
-              data: {
-                userId,
-                points: achievement.pointsReward,
-                action: `ACHIEVEMENT_${achievement.key}`,
-                description: `Logro desbloqueado: ${achievement.displayName}`
-              }
-            });
-          }
-
-          console.log(`Usuario ${userId} desbloqueó: ${achievement.displayName}!`);
-          
-
-        }
+        await unlockAchievement(userId, achievement, hasAchievement);
       }
     }
   } catch (error) {
     console.error("Error verificando achievements:", error);
   }
+}
+
+async function checkAchievementRequirement(
+  achievement: any,
+  userGamification: any,
+  userId: number
+): Promise<boolean> {
+  const { requiredAction, requiredCount } = achievement;
+
+  if (!requiredAction) return false;
+
+  switch (requiredAction) {
+
+    case "complete_reservation":
+      return userGamification.reservationsCompleted >= (requiredCount || 1);
+    
+    case "reservation_streak":
+      return userGamification.reservationsCompleted >= (requiredCount || 5);
+    
+    case "complete_reservations":
+      return userGamification.reservationsCompleted >= (requiredCount || 50);
+
+    // === RATINGS ===
+    case "give_rating":
+      return userGamification.ratingsGiven >= (requiredCount || 1);
+    
+    case "give_ratings":
+      return userGamification.ratingsGiven >= (requiredCount || 10);
+    
+    case "helpful_comments":
+
+      return false;
+
+    // === CLAIMS ===
+    case "create_claim":
+      return userGamification.claimsCreated >= (requiredCount || 1);
+    
+    case "resolved_claims":
+      return userGamification.claimsResolved >= (requiredCount || 5);
+    
+    case "give_adhesions":
+      return userGamification.adhesionsGiven >= (requiredCount || 20);
+
+    // === SOCIAL ===
+    case "consecutive_days":
+      return userGamification.consecutiveDays >= (requiredCount || 7);
+    
+    case "days_active":
+      return await checkDaysActive(userId, requiredCount || 365);
+    
+    case "early_adopter":
+      return await checkEarlyAdopter(userId);
+
+    default:
+      console.warn(`Achievement action desconocida: ${requiredAction}`);
+      return false;
+  }
+}
+
+
+async function unlockAchievement(
+  userId: number,
+  achievement: any,
+  existingAchievement: any
+) {
+  try {
+    if (existingAchievement && achievement.isRepeatable) {
+
+      await prisma.userAchievement.update({
+        where: {
+          userId_achievementId: {
+            userId,
+            achievementId: achievement.id
+          }
+        },
+        data: {
+          timesEarned: {
+            increment: 1
+          },
+          unlockedAt: new Date()
+        }
+      });
+
+      console.log(`🎉 Usuario ${userId} completó "${achievement.displayName}" por ${existingAchievement.timesEarned + 1}ª vez`);
+    } else {
+
+      await prisma.userAchievement.create({
+        data: {
+          userId,
+          achievementId: achievement.id,
+          timesEarned: 1,
+          unlockedAt: new Date()
+        }
+      });
+
+      console.log(`🎉 Usuario ${userId} desbloqueó: "${achievement.displayName}" (+${achievement.pointsReward} pts)`);
+    }
+
+
+    if (achievement.pointsReward > 0) {
+      await prisma.userGamification.update({
+        where: { userId },
+        data: {
+          totalPoints: {
+            increment: achievement.pointsReward
+          }
+        }
+      });
+
+      await prisma.pointTransaction.create({
+        data: {
+          userId,
+          points: achievement.pointsReward,
+          action: `ACHIEVEMENT_${achievement.key}`,
+          description: `Logro desbloqueado: ${achievement.displayName}`
+        }
+      });
+    }
+  } catch (error) {
+    console.error(`Error desbloqueando achievement ${achievement.key}:`, error);
+  }
+}
+
+
+async function checkDaysActive(userId: number, required: number): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { createdAt: true }
+  });
+
+  if (!user) return false;
+
+  const daysSinceCreation = Math.floor(
+    (Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  return daysSinceCreation >= required;
+}
+
+
+async function checkEarlyAdopter(userId: number): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, createdAt: true }
+  });
+
+  if (!user) return false;
+
+
+  const earlierUsers = await prisma.user.count({
+    where: {
+      createdAt: {
+        lt: user.createdAt
+      }
+    }
+  });
+
+  return earlierUsers < 50;
+}
+
+
+async function checkProfileComplete(userId: number): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      name: true,
+      email: true,
+      apartmentId: true
+    }
+  });
+
+  if (!user) return false;
+
+
+  return !!(
+    user.name &&
+    user.email &&
+    user.apartmentId
+  );
 }
 
 
@@ -353,6 +443,8 @@ async function updateUserStats(
         }
       }
     });
+
+
   } catch (error) {
     console.error("Error actualizando estadísticas:", error);
   }
@@ -383,6 +475,7 @@ async function updateDailyStreak(userId: number) {
         }
       });
       await addPoints(userId, "DAILY_LOGIN");
+
       return;
     }
 
@@ -424,9 +517,149 @@ async function updateDailyStreak(userId: number) {
         }
       });
       await addPoints(userId, "DAILY_LOGIN");
+
     }
   } catch (error) {
     console.error("Error actualizando racha diaria:", error);
+  }
+}
+
+
+export async function refreshAchievements(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user.id; // Del middleware de auth
+
+    console.log(`🔄 Refrescando achievements para usuario ${userId}...`);
+
+
+    const userGamification = await prisma.userGamification.findUnique({
+      where: { userId },
+      include: {
+        achievements: {
+          include: {
+            achievement: true
+          }
+        }
+      }
+    });
+
+    if (!userGamification) {
+      return res.status(404).json({ message: "Perfil de gamificación no encontrado" });
+    }
+
+
+    const allAchievements = await prisma.achievement.findMany({
+      where: { isActive: true }
+    });
+
+    const unlockedAchievements = [];
+    let totalPointsEarned = 0;
+
+
+    for (const achievement of allAchievements) {
+
+      const hasAchievement = userGamification.achievements.find(
+        ua => ua.achievementId === achievement.id
+      );
+
+      // Si ya lo tiene y no es repetible, saltar
+      if (hasAchievement && !achievement.isRepeatable) continue;
+
+
+      const shouldUnlock = await checkAchievementRequirement(
+        achievement,
+        userGamification,
+        userId
+      );
+
+      if (shouldUnlock) {
+
+        if (hasAchievement && achievement.isRepeatable) {
+
+          await prisma.userAchievement.update({
+            where: {
+              userId_achievementId: {
+                userId,
+                achievementId: achievement.id
+              }
+            },
+            data: {
+              timesEarned: {
+                increment: 1
+              },
+              unlockedAt: new Date()
+            }
+          });
+
+          unlockedAchievements.push({
+            ...achievement,
+            timesEarned: hasAchievement.timesEarned + 1,
+            isNew: false
+          });
+
+          console.log(`🎉 Usuario ${userId} completó "${achievement.displayName}" por ${hasAchievement.timesEarned + 1}ª vez`);
+        } else {
+
+          await prisma.userAchievement.create({
+            data: {
+              userId,
+              achievementId: achievement.id,
+              timesEarned: 1,
+              unlockedAt: new Date()
+            }
+          });
+
+          unlockedAchievements.push({
+            ...achievement,
+            timesEarned: 1,
+            isNew: true
+          });
+
+          console.log(`🎉 Usuario ${userId} desbloqueó: "${achievement.displayName}" (+${achievement.pointsReward} pts)`);
+        }
+
+
+        if (achievement.pointsReward > 0) {
+          await prisma.userGamification.update({
+            where: { userId },
+            data: {
+              totalPoints: {
+                increment: achievement.pointsReward
+              }
+            }
+          });
+
+          await prisma.pointTransaction.create({
+            data: {
+              userId,
+              points: achievement.pointsReward,
+              action: `ACHIEVEMENT_${achievement.key}`,
+              description: `Logro desbloqueado: ${achievement.displayName}`
+            }
+          });
+
+          totalPointsEarned += achievement.pointsReward;
+        }
+      }
+    }
+
+
+    if (totalPointsEarned > 0) {
+      await checkAndUpdateLevel(userId);
+    }
+
+    res.json({
+      success: true,
+      unlockedCount: unlockedAchievements.length,
+      unlockedAchievements,
+      totalPointsEarned,
+      message: unlockedAchievements.length > 0 
+        ? `¡Desbloqueaste ${unlockedAchievements.length} logro(s)!`
+        : "No hay nuevos logros desbloqueados"
+    });
+  } catch (error) {
+    console.error("Error refrescando achievements:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 }
 

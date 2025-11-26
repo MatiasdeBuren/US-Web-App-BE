@@ -5,7 +5,8 @@ import {
   getAllAchievements,
   getCustomizationOptions,
   updateCustomization,
-  getPointTransactions
+  getPointTransactions,
+  refreshAchievements
 } from "../controllers/gamificationController";
 import { requireAuth } from "../auth_middleware";
 
@@ -20,5 +21,6 @@ router.get("/transactions/:userId", getPointTransactions);
 // Rutas protegidas que requieren autenticación
 router.get("/customization/:userId", requireAuth, getCustomizationOptions);
 router.put("/customize", requireAuth, updateCustomization);
+router.post("/refresh-achievements", requireAuth, refreshAchievements);
 
 export default router;

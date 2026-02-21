@@ -10,7 +10,7 @@ import { initializeUserGamification, updateDailyStreak } from "./gamificationCon
 // POST /register
 export const register = async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, apartmentId } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Es necesario completar todos los campos" });
     }
@@ -18,23 +18,32 @@ export const register = async (req: Request, res: Response) => {
     const userExists = await prisma.user.findUnique({ where: { email } });
     if (userExists) return res.status(400).json({ message: "El usuario ya existe" });
 
+    // Validate apartment exists if provided
+    if (apartmentId !== undefined) {
+      const apartment = await prisma.apartment.findUnique({ where: { id: Number(apartmentId) } });
+      if (!apartment) {
+        return res.status(400).json({ message: "El departamento especificado no existe" });
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, 12);
     const newUser = await prisma.user.create({
       data: {
         name,
         email,
-        password: passwordHash
+        password: passwordHash,
+        ...(apartmentId !== undefined && { apartmentId: Number(apartmentId) })
       }
     });
-    
+
     initializeUserGamification(newUser.id)
       .catch(err => console.error('Error initializing gamification:', err));
 
     res.status(201).json({ message: "Usuario registrado con éxito" });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error interno del servidor" });
-    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
 };
 
 // POST /login

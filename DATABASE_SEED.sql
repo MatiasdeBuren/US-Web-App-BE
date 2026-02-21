@@ -2,7 +2,7 @@
 -- SCRIPT DE POBLACIÓN DE BASE DE DATOS
 -- ============================================
 -- Contraseña para todos los usuarios: 12345A
--- Hash bcrypt: $2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.
+-- Hash bcrypt: $2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW
 -- ============================================
 
 -- 1. ESTADOS DE RESERVA (DEBE IR PRIMERO)
@@ -76,7 +76,7 @@ INSERT INTO "User" (name, email, password, role, "createdAt")
 VALUES (
   'Administrador Principal',
   'admin@gmail.com',
-  '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
+  '$2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW',
   'admin',
   NOW()
 )
@@ -87,7 +87,7 @@ INSERT INTO "User" (name, email, password, role, "createdAt")
 VALUES (
   'Juan Pérez',
   'juan.perez@gmail.com',
-  '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
+  '$2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW',
   'owner',
   NOW()
 )
@@ -123,7 +123,7 @@ INSERT INTO "User" (name, email, password, role, "apartmentId", "createdAt")
 VALUES (
   'María González',
   'maria.gonzalez@gmail.com',
-  '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
+  '$2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1),
   NOW()
@@ -131,7 +131,7 @@ VALUES (
 (
   'Ana Martínez',
   'ana.martinez@gmail.com',
-  '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
+  '$2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '201' LIMIT 1),
   NOW()
@@ -139,7 +139,7 @@ VALUES (
 (
   'Pedro López',
   'pedro.lopez@gmail.com',
-  '$2b$10$YhVGZ0R3c3xh5iKw5WZfbeJ9BfQGqH5vGZJ4oN/XWZJqHZLQKW4G.',
+  '$2b$12$.MTa6XxngClzLDIR.4j3..D95u70qkIIW5Ytcp1LSmixXfjkQtyrW',
   'tenant',
   (SELECT id FROM "Apartment" WHERE unit = '102' LIMIT 1),
   NOW()

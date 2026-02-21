@@ -35,3 +35,17 @@ export {
   getClaimsMonthlyStats,
   getClaimsMetrics
 } from "./claimsController";
+
+// Expenses Management
+export {
+  getExpenses,
+  getExpense,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  registerExpensePayment,
+  deleteExpensePayment,
+  getExpenseTypes,
+  getExpenseStatuses,
+  getPaymentMethods
+} from "./expensesController";

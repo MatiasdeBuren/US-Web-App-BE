@@ -19,7 +19,17 @@ import {
   getPendingReservations,
   cancelReservationAsAdmin,
   getClaimsMonthlyStats,
-  getClaimsMetrics
+  getClaimsMetrics,
+  getExpenses,
+  getExpense,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+  registerExpensePayment,
+  deleteExpensePayment,
+  getExpenseTypes,
+  getExpenseStatuses,
+  getPaymentMethods
 } from "../controllers/admin";
 import {
   getAdminClaims,
@@ -73,5 +83,17 @@ router.delete("/claims/:id", validateAdmin, deleteAdminClaim);
 router.get("/notifications", validateAdmin, getAdminNotifications);
 router.post("/notifications/:id/mark-read", validateAdmin, markNotificationRead);
 router.post("/notifications/mark-all-read", validateAdmin, markAllNotificationsRead);
+
+router.get("/expenses/types",           validateAdmin, getExpenseTypes);
+router.get("/expenses/statuses",        validateAdmin, getExpenseStatuses);
+router.get("/expenses/payment-methods", validateAdmin, getPaymentMethods);
+router.get("/expenses",      validateAdmin, getExpenses);
+router.post("/expenses",     validateAdmin, createExpense);
+router.get("/expenses/:id",  validateAdmin, getExpense);
+router.put("/expenses/:id",  validateAdmin, updateExpense);
+router.delete("/expenses/:id", validateAdmin, deleteExpense);
+
+router.post("/expenses/:expenseId/payments",              validateAdmin, registerExpensePayment);
+router.delete("/expenses/:expenseId/payments/:paymentId", validateAdmin, deleteExpensePayment);
 
 export default router;

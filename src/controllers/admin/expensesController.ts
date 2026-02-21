@@ -534,7 +534,7 @@ export const deleteExpense = async (req: Request, res: Response) => {
 export const registerExpensePayment = async (req: Request, res: Response) => {
   try {
     const admin = (req as any).user;
-    const { id } = req.params;
+    const { expenseId: id } = req.params;
     const expenseId = parseInt(id);
 
     if (isNaN(expenseId)) {

@@ -235,14 +235,27 @@ export const createExpense = async (req: Request, res: Response) => {
       }
     }
 
+    let resolvedUserId: number | null = userId || null;
+
     if (apartmentId) {
-      const apt = await prisma.apartment.findUnique({ where: { id: apartmentId } });
+      const apt = await prisma.apartment.findUnique({
+        where: { id: apartmentId },
+        include: { tenants: { select: { id: true } } }
+      });
       if (!apt) {
         return res.status(404).json({ message: `Apartamento ${apartmentId} no encontrado` });
       }
+      // Only auto-set userId when there is exactly one tenant and the admin didn't send one
+      if (!resolvedUserId && apt.tenants.length === 1) {
+        resolvedUserId = apt.tenants[0].id;
+      }
     }
 
-    if (userId) {
+    if (resolvedUserId && !userId) {
+      // Validate the auto-resolved user still exists
+      const usr = await prisma.user.findUnique({ where: { id: resolvedUserId } });
+      if (!usr) resolvedUserId = null;
+    } else if (userId) {
       const usr = await prisma.user.findUnique({ where: { id: userId } });
       if (!usr) {
         return res.status(404).json({ message: `Usuario ${userId} no encontrado` });
@@ -295,7 +308,7 @@ export const createExpense = async (req: Request, res: Response) => {
     const expense = await prisma.expense.create({
       data: {
         apartmentId: apartmentId || null,
-        userId:      userId      || null,
+        userId:      resolvedUserId,
         period:      periodDate,
         dueDate:     dueDateObj,
         totalAmount,
@@ -401,8 +414,24 @@ export const updateExpense = async (req: Request, res: Response) => {
 
     const updateData: any = {};
 
-    if (apartmentId !== undefined) updateData.apartmentId = apartmentId || null;
-    if (userId      !== undefined) updateData.userId      = userId      || null;
+    if (apartmentId !== undefined) {
+      updateData.apartmentId = apartmentId || null;
+
+      if (userId === undefined && apartmentId) {
+        const apt = await prisma.apartment.findUnique({
+          where: { id: apartmentId },
+          include: { tenants: { select: { id: true } } }
+        });
+        if (apt && apt.tenants.length === 1) {
+          updateData.userId = apt.tenants[0].id;
+        } else if (apt && apt.tenants.length !== 1) {
+          // Multiple tenants or none: keep existing userId or clear it
+          updateData.userId = existing.userId ?? null;
+        }
+      }
+    }
+
+    if (userId !== undefined) updateData.userId = userId || null;
     if (adminNotes  !== undefined) updateData.adminNotes  = adminNotes  || null;
 
     if (period) {

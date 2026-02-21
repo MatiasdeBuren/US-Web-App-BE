@@ -12,6 +12,7 @@ import adminRoutes from "./routes/adminRoutes";
 import ratingRoutes from "./routes/ratings";
 import gamificationRoutes from "./routes/gamificationRoutes";
 import projectFlowRoutes from "./routes/projectFlowRoutes";
+import expenseRoutes from "./routes/expenseRoutes";
 import { emailService } from "./services/emailService";
 import { prisma } from "./prismaClient";
 
@@ -42,6 +43,7 @@ app.use("/claims", claimAdhesionRoutes);
 app.use("/", ratingRoutes);
 app.use("/gamification", gamificationRoutes);
 app.use("/projectflow", projectFlowRoutes);
+app.use("/expenses", expenseRoutes);
 
 app.use("/admin", adminRoutes); 
 

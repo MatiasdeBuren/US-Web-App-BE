@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../prismaClient";
-import { syncOverdueExpenses } from "../../services/expenseStatusUtils";
 
 const expenseInclude = {
   apartment: {
@@ -27,46 +26,53 @@ const expenseInclude = {
   }
 };
 
-/** Recalcula paidAmount y actualiza el statusId según los pagos registrados */
-async function recalculateExpenseStatus(expenseId: number) {
-  const expense = await prisma.expense.findUnique({
-    where: { id: expenseId },
-    include: {
-      payments: { select: { amount: true } }
-    }
-  });
-
-  if (!expense) return;
-
-  const paidAmount = expense.payments.reduce((sum, p) => sum + p.amount, 0);
-
-  const [pendiente, parcial, pagado, vencido] = await Promise.all([
-    prisma.expenseStatus.findUnique({ where: { name: "pendiente" } }),
-    prisma.expenseStatus.findUnique({ where: { name: "parcial" } }),
-    prisma.expenseStatus.findUnique({ where: { name: "pagado" } }),
-    prisma.expenseStatus.findUnique({ where: { name: "vencido" } })
-  ]);
-
+async function resolveNewStatus(
+  db: any,
+  paidAmount: number,
+  totalAmount: number,
+  dueDate: Date
+): Promise<number> {
+  const statuses = await db.expenseStatus.findMany({ select: { id: true, name: true } });
+  const map: Record<string, number> = Object.fromEntries(statuses.map((s: any) => [s.name, s.id]));
   const now = new Date();
-  let statusId: number;
-
-  if (paidAmount >= expense.totalAmount) {
-    statusId = pagado!.id;
-  } else if (paidAmount > 0) {
-    statusId = parcial!.id;
-  } else if (expense.dueDate < now) {
-    statusId = vencido!.id;
-  } else {
-    statusId = pendiente!.id;
-  }
-
-  await prisma.expense.update({
-    where: { id: expenseId },
-    data: { paidAmount, statusId }
-  });
+  if (paidAmount >= totalAmount) return map["pagado"];
+  if (paidAmount > 0)           return map["parcial"];
+  if (dueDate < now)            return map["vencido"];
+  return map["pendiente"];
 }
 
-// Devuelve todos los tipos con sus subtipos anidados.
+async function validateLineItems(lineItems: any[]): Promise<string | null> {
+  for (const [i, item] of lineItems.entries()) {
+    if (!item.typeId || typeof item.typeId !== "number")
+      return `lineItems[${i}]: 'typeId' es requerido y debe ser un número`;
+    if (typeof item.amount !== "number" || item.amount <= 0)
+      return `lineItems[${i}]: 'amount' debe ser un número mayor a 0`;
+  }
+
+  const typeIds    = [...new Set(lineItems.map((i: any) => i.typeId))] as number[];
+  const subtypeIds = [...new Set(lineItems.filter((i: any) => i.subtypeId).map((i: any) => i.subtypeId))] as number[];
+
+  const [typesFound, subtypesFound] = await Promise.all([
+    prisma.expenseType.findMany({ where: { id: { in: typeIds } }, select: { id: true } }),
+    subtypeIds.length > 0
+      ? prisma.expenseSubtype.findMany({ where: { id: { in: subtypeIds } }, select: { id: true, typeId: true } })
+      : Promise.resolve([])
+  ]);
+
+  if (typesFound.length !== typeIds.length) return "Uno o más typeId no son válidos";
+  if (subtypeIds.length > 0 && subtypesFound.length !== subtypeIds.length) return "Uno o más subtypeId no son válidos";
+
+  for (const item of lineItems) {
+    if (item.subtypeId) {
+      const sub = (subtypesFound as any[]).find((s) => s.id === item.subtypeId);
+      if (sub && sub.typeId !== item.typeId)
+        return `El subtipo ${item.subtypeId} no pertenece al tipo ${item.typeId}`;
+    }
+  }
+
+  return null;
+}
+
 export const getExpenseTypes = async (_req: Request, res: Response) => {
   try {
     const types = await prisma.expenseType.findMany({
@@ -111,7 +117,6 @@ export const getPaymentMethods = async (_req: Request, res: Response) => {
 
 export const getExpenses = async (req: Request, res: Response) => {
   try {
-    const admin = (req as any).user;
     const {
       userId,
       apartmentId,
@@ -120,8 +125,6 @@ export const getExpenses = async (req: Request, res: Response) => {
       page = "1",
       limit = "20"
     } = req.query;
-
-    console.log(` [ADMIN EXPENSES] ${admin.email} listing expenses. Filters:`, req.query);
 
     const where: any = {};
 
@@ -139,8 +142,6 @@ export const getExpenses = async (req: Request, res: Response) => {
     const pageNum  = Math.max(parseInt(page as string) || 1, 1);
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
     const skip     = (pageNum - 1) * limitNum;
-
-    await syncOverdueExpenses(where);
 
     const [expenses, total] = await Promise.all([
       prisma.expense.findMany({
@@ -176,8 +177,6 @@ export const getExpense = async (req: Request, res: Response) => {
     if (isNaN(expenseId)) {
       return res.status(400).json({ message: "ID de expensa inválido" });
     }
-
-    await syncOverdueExpenses({ id: expenseId });
 
     const expense = await prisma.expense.findUnique({
       where: { id: expenseId },
@@ -222,23 +221,11 @@ export const createExpense = async (req: Request, res: Response) => {
     }
 
     if (!Array.isArray(lineItems) || lineItems.length === 0) {
-      return res.status(400).json({
-        message: "Debe incluir al menos una línea de detalle (lineItems)"
-      });
+      return res.status(400).json({ message: "Debe incluir al menos una línea de detalle (lineItems)" });
     }
 
-    for (const [i, item] of lineItems.entries()) {
-      if (!item.typeId || typeof item.typeId !== "number") {
-        return res.status(400).json({
-          message: `lineItems[${i}]: 'typeId' es requerido y debe ser un número`
-        });
-      }
-      if (typeof item.amount !== "number" || item.amount <= 0) {
-        return res.status(400).json({
-          message: `lineItems[${i}]: 'amount' debe ser un número mayor a 0`
-        });
-      }
-    }
+    const validationError = await validateLineItems(lineItems);
+    if (validationError) return res.status(400).json({ message: validationError });
 
     let resolvedUserId: number | null = userId || null;
 
@@ -256,55 +243,14 @@ export const createExpense = async (req: Request, res: Response) => {
       }
     }
 
-    if (resolvedUserId && !userId) {
-      // Validate the auto-resolved user still exists
-      const usr = await prisma.user.findUnique({ where: { id: resolvedUserId } });
-      if (!usr) resolvedUserId = null;
-    } else if (userId) {
+    if (userId) {
       const usr = await prisma.user.findUnique({ where: { id: userId } });
       if (!usr) {
         return res.status(404).json({ message: `Usuario ${userId} no encontrado` });
       }
     }
 
-    const typeIds    = [...new Set(lineItems.map((i: any) => i.typeId))];
-    const subtypeIds = [...new Set(lineItems.filter((i: any) => i.subtypeId).map((i: any) => i.subtypeId))];
-
-    const [typesFound, subtypesFound] = await Promise.all([
-      prisma.expenseType.findMany({ where: { id: { in: typeIds as number[] } }, select: { id: true } }),
-      subtypeIds.length > 0
-        ? prisma.expenseSubtype.findMany({ where: { id: { in: subtypeIds as number[] } }, select: { id: true, typeId: true } })
-        : Promise.resolve([])
-    ]);
-
-    if (typesFound.length !== typeIds.length) {
-      return res.status(400).json({ message: "Uno o más typeId no son válidos" });
-    }
-
-    if (subtypeIds.length > 0 && subtypesFound.length !== subtypeIds.length) {
-      return res.status(400).json({ message: "Uno o más subtypeId no son válidos" });
-    }
-
-    for (const item of lineItems) {
-      if (item.subtypeId) {
-        const sub = (subtypesFound as any[]).find((s) => s.id === item.subtypeId);
-        if (sub && sub.typeId !== item.typeId) {
-          return res.status(400).json({
-            message: `El subtipo ${item.subtypeId} no pertenece al tipo ${item.typeId}`
-          });
-        }
-      }
-    }
-
     const totalAmount = lineItems.reduce((sum: number, item: any) => sum + item.amount, 0);
-
-    const [pendienteStatus, vencidoStatus] = await Promise.all([
-      prisma.expenseStatus.findUnique({ where: { name: "pendiente" } }),
-      prisma.expenseStatus.findUnique({ where: { name: "vencido" } })
-    ]);
-    if (!pendienteStatus || !vencidoStatus) {
-      return res.status(500).json({ message: "No se encontraron los estados de expensa. Ejecute el seed." });
-    }
 
     const periodDate = new Date(period);
     periodDate.setDate(1);
@@ -313,7 +259,7 @@ export const createExpense = async (req: Request, res: Response) => {
     const dueDateObj = new Date(dueDate);
     dueDateObj.setHours(23, 59, 59, 999);
 
-    const initialStatusId = dueDateObj < new Date() ? vencidoStatus.id : pendienteStatus.id;
+    const initialStatusId = await resolveNewStatus(prisma, 0, totalAmount, dueDateObj);
 
     const expense = await prisma.expense.create({
       data: {
@@ -379,47 +325,10 @@ export const updateExpense = async (req: Request, res: Response) => {
 
     if (lineItems !== undefined) {
       if (!Array.isArray(lineItems) || lineItems.length === 0) {
-        return res.status(400).json({
-          message: "lineItems debe ser un arreglo no vacío"
-        });
+        return res.status(400).json({ message: "lineItems debe ser un arreglo no vacío" });
       }
-
-      for (const [i, item] of lineItems.entries()) {
-        if (!item.typeId || typeof item.typeId !== "number") {
-          return res.status(400).json({ message: `lineItems[${i}]: 'typeId' requerido` });
-        }
-        if (typeof item.amount !== "number" || item.amount <= 0) {
-          return res.status(400).json({ message: `lineItems[${i}]: 'amount' debe ser > 0` });
-        }
-      }
-
-      const typeIds    = [...new Set(lineItems.map((i: any) => i.typeId))];
-      const subtypeIds = [...new Set(lineItems.filter((i: any) => i.subtypeId).map((i: any) => i.subtypeId))];
-
-      const [typesFound, subtypesFound] = await Promise.all([
-        prisma.expenseType.findMany({ where: { id: { in: typeIds as number[] } }, select: { id: true } }),
-        subtypeIds.length > 0
-          ? prisma.expenseSubtype.findMany({ where: { id: { in: subtypeIds as number[] } }, select: { id: true, typeId: true } })
-          : Promise.resolve([])
-      ]);
-
-      if (typesFound.length !== typeIds.length) {
-        return res.status(400).json({ message: "Uno o más typeId no son válidos" });
-      }
-      if (subtypeIds.length > 0 && subtypesFound.length !== subtypeIds.length) {
-        return res.status(400).json({ message: "Uno o más subtypeId no son válidos" });
-      }
-
-      for (const item of lineItems) {
-        if (item.subtypeId) {
-          const sub = (subtypesFound as any[]).find((s) => s.id === item.subtypeId);
-          if (sub && sub.typeId !== item.typeId) {
-            return res.status(400).json({
-              message: `El subtipo ${item.subtypeId} no pertenece al tipo ${item.typeId}`
-            });
-          }
-        }
-      }
+      const validationError = await validateLineItems(lineItems);
+      if (validationError) return res.status(400).json({ message: validationError });
     }
 
     const updateData: any = {};
@@ -435,7 +344,6 @@ export const updateExpense = async (req: Request, res: Response) => {
         if (apt && apt.tenants.length === 1) {
           updateData.userId = apt.tenants[0].id;
         } else if (apt && apt.tenants.length !== 1) {
-          // Multiple tenants or none: keep existing userId or clear it
           updateData.userId = existing.userId ?? null;
         }
       }
@@ -478,20 +386,7 @@ export const updateExpense = async (req: Request, res: Response) => {
       const effectiveDueDate = updateData.dueDate ?? existing.dueDate;
       const effectiveTotal   = updateData.totalAmount ?? existing.totalAmount;
       const paidAmount = existing.payments.reduce((sum, p) => sum + p.amount, 0);
-      const statuses = await tx.expenseStatus.findMany();
-      const statusMap = Object.fromEntries(statuses.map((s) => [s.name, s.id]));
-
-      const now = new Date();
-      let statusId: number;
-      if (paidAmount >= effectiveTotal) {
-        statusId = statusMap["pagado"];
-      } else if (paidAmount > 0) {
-        statusId = statusMap["parcial"];
-      } else if (effectiveDueDate < now) {
-        statusId = statusMap["vencido"];
-      } else {
-        statusId = statusMap["pendiente"];
-      }
+      const statusId = await resolveNewStatus(tx, paidAmount, effectiveTotal, effectiveDueDate);
 
       updateData.paidAmount = paidAmount;
       updateData.statusId   = statusId;
@@ -591,25 +486,12 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
       });
 
       const newPaidAmount = expWithPayments!.payments.reduce((sum, p) => sum + p.amount, 0);
-
-      const [pendiente, parcial, pagado, vencido] = await Promise.all([
-        tx.expenseStatus.findUnique({ where: { name: "pendiente" } }),
-        tx.expenseStatus.findUnique({ where: { name: "parcial" } }),
-        tx.expenseStatus.findUnique({ where: { name: "pagado" } }),
-        tx.expenseStatus.findUnique({ where: { name: "vencido" } })
-      ]);
-
-      const now = new Date();
-      let newStatusId: number;
-      if (newPaidAmount >= expWithPayments!.totalAmount) {
-        newStatusId = pagado!.id;
-      } else if (newPaidAmount > 0) {
-        newStatusId = parcial!.id;
-      } else if (expWithPayments!.dueDate < now) {
-        newStatusId = vencido!.id;
-      } else {
-        newStatusId = pendiente!.id;
-      }
+      const newStatusId = await resolveNewStatus(
+        tx,
+        newPaidAmount,
+        expWithPayments!.totalAmount,
+        expWithPayments!.dueDate
+      );
 
       await tx.expense.update({
         where: { id: expenseId },
@@ -667,25 +549,12 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
       });
 
       const newPaidAmount = expWithPayments!.payments.reduce((sum, p) => sum + p.amount, 0);
-
-      const [pendiente, parcial, pagado, vencido] = await Promise.all([
-        tx.expenseStatus.findUnique({ where: { name: "pendiente" } }),
-        tx.expenseStatus.findUnique({ where: { name: "parcial" } }),
-        tx.expenseStatus.findUnique({ where: { name: "pagado" } }),
-        tx.expenseStatus.findUnique({ where: { name: "vencido" } })
-      ]);
-
-      const now = new Date();
-      let newStatusId: number;
-      if (newPaidAmount >= expWithPayments!.totalAmount) {
-        newStatusId = pagado!.id;
-      } else if (newPaidAmount > 0) {
-        newStatusId = parcial!.id;
-      } else if (expWithPayments!.dueDate < now) {
-        newStatusId = vencido!.id;
-      } else {
-        newStatusId = pendiente!.id;
-      }
+      const newStatusId = await resolveNewStatus(
+        tx,
+        newPaidAmount,
+        expWithPayments!.totalAmount,
+        expWithPayments!.dueDate
+      );
 
       await tx.expense.update({
         where: { id: expenseId },

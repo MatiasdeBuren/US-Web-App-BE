@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
-import { syncOverdueExpenses } from "../services/expenseStatusUtils";
 
 export const getExpenseTypes = async (_req: Request, res: Response) => {
   try {
@@ -64,8 +63,6 @@ export const getUserExpenses = async (req: Request, res: Response) => {
     const limitNum = Math.min(parseInt(limit as string) || 20, 50);
     const skip     = (pageNum - 1) * limitNum;
 
-    await syncOverdueExpenses({ OR: ownership.or });
-
     const [expenses, total] = await Promise.all([
       prisma.expense.findMany({
         where,
@@ -94,8 +91,6 @@ export const getUserExpensesSummary = async (req: Request, res: Response) => {
 
     const ownership = await expenseWhereForUser(userId);
     if (!ownership) return res.status(404).json({ message: "Usuario no encontrado" });
-
-    await syncOverdueExpenses({ OR: ownership.or });
 
     const unpaidExpenses = await prisma.expense.findMany({
       where: {
@@ -151,8 +146,6 @@ export const getUserExpense = async (req: Request, res: Response) => {
 
     const ownership = await expenseWhereForUser(userId);
     if (!ownership) return res.status(404).json({ message: "Usuario no encontrado" });
-
-    await syncOverdueExpenses({ id: expenseId, OR: ownership.or });
 
     const expense = await prisma.expense.findFirst({
       where: { id: expenseId, OR: ownership.or },

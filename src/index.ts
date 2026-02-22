@@ -15,6 +15,7 @@ import projectFlowRoutes from "./routes/projectFlowRoutes";
 import expenseRoutes from "./routes/expenseRoutes";
 import { emailService } from "./services/emailService";
 import { prisma } from "./prismaClient";
+import { syncOverdueExpenses } from "./services/expenseStatusUtils";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -115,7 +116,9 @@ async function updateExpiredReservations() {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   
-  // Update expired reservations every 5 minutes
+  // Update expired reservations and overdue expenses
   setInterval(updateExpiredReservations, 5 * 60 * 1000);
+  setInterval(syncOverdueExpenses, 5 * 60 * 1000);
   updateExpiredReservations();
+  syncOverdueExpenses();
 });

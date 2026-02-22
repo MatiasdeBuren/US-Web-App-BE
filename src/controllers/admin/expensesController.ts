@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../prismaClient";
+import { syncOverdueExpenses } from "../../services/expenseStatusUtils";
 
 const expenseInclude = {
   apartment: {
@@ -139,6 +140,8 @@ export const getExpenses = async (req: Request, res: Response) => {
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
     const skip     = (pageNum - 1) * limitNum;
 
+    await syncOverdueExpenses(where);
+
     const [expenses, total] = await Promise.all([
       prisma.expense.findMany({
         where,
@@ -173,6 +176,8 @@ export const getExpense = async (req: Request, res: Response) => {
     if (isNaN(expenseId)) {
       return res.status(400).json({ message: "ID de expensa inválido" });
     }
+
+    await syncOverdueExpenses({ id: expenseId });
 
     const expense = await prisma.expense.findUnique({
       where: { id: expenseId },

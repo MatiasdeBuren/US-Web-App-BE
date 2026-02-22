@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
-    "build": "prisma generate",
+    "build": "tsc && prisma generate",
     "start": "npx prisma db push && node index.js",
     "postinstall": "prisma generate",
     "test": "jest",

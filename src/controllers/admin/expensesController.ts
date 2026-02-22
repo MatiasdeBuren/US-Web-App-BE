@@ -30,10 +30,12 @@ async function resolveNewStatus(
   db: any,
   paidAmount: number,
   totalAmount: number,
-  dueDate: Date
+  dueDate: Date,
+  preloadedStatusMap?: Record<string, number>
 ): Promise<number> {
-  const statuses = await db.expenseStatus.findMany({ select: { id: true, name: true } });
-  const map: Record<string, number> = Object.fromEntries(statuses.map((s: any) => [s.name, s.id]));
+  const map: Record<string, number> = preloadedStatusMap ?? Object.fromEntries(
+    (await db.expenseStatus.findMany({ select: { id: true, name: true } })).map((s: any) => [s.name, s.id])
+  );
   const now = new Date();
   if (paidAmount >= totalAmount) return map["pagado"];
   if (paidAmount > 0)           return map["parcial"];
@@ -464,7 +466,10 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
       }
     }
 
-    const { payment, updatedExpense } = await prisma.$transaction(async (tx) => {
+    const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
+    const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
+
+    const payment = await prisma.$transaction(async (tx) => {
       const newPayment = await tx.expensePayment.create({
         data: {
           expenseId,
@@ -490,7 +495,8 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
         tx,
         newPaidAmount,
         expWithPayments!.totalAmount,
-        expWithPayments!.dueDate
+        expWithPayments!.dueDate,
+        statusMap
       );
 
       await tx.expense.update({
@@ -498,12 +504,12 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
         data: { paidAmount: newPaidAmount, statusId: newStatusId }
       });
 
-      const refreshed = await tx.expense.findUnique({
-        where: { id: expenseId },
-        include: expenseInclude
-      });
+      return newPayment;
+    });
 
-      return { payment: newPayment, updatedExpense: refreshed };
+    const updatedExpense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: expenseInclude
     });
 
     console.log(
@@ -540,7 +546,10 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Pago no encontrado" });
     }
 
-    const updatedExpense = await prisma.$transaction(async (tx) => {
+    const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
+    const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
+
+    await prisma.$transaction(async (tx) => {
       await tx.expensePayment.delete({ where: { id: paymentId } });
 
       const expWithPayments = await tx.expense.findUnique({
@@ -553,18 +562,19 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
         tx,
         newPaidAmount,
         expWithPayments!.totalAmount,
-        expWithPayments!.dueDate
+        expWithPayments!.dueDate,
+        statusMap
       );
 
       await tx.expense.update({
         where: { id: expenseId },
         data: { paidAmount: newPaidAmount, statusId: newStatusId }
       });
+    });
 
-      return tx.expense.findUnique({
-        where: { id: expenseId },
-        include: expenseInclude
-      });
+    const updatedExpense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+      include: expenseInclude
     });
 
     console.log(

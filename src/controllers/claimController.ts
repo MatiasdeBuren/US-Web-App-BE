@@ -13,8 +13,6 @@ const parsePaginationParams = (page?: string, limit?: string) => {
 const buildClaimFilters = (category?: string, status?: string, search?: string, userId?: number) => {
   const where: any = {};
 
-  console.log(' [BUILD FILTERS] Input params:', { category, status, search, userId });
-
   if (userId) {
     where.userId = userId;
   }
@@ -35,7 +33,6 @@ const buildClaimFilters = (category?: string, status?: string, search?: string, 
     ];
   }
 
-  console.log('[BUILD FILTERS] Generated where clause:', JSON.stringify(where, null, 2));
   return where;
 };
 
@@ -137,8 +134,6 @@ const mapClaimWithCreatedBy = async (claim: any, requestingUser?: any) => {
 
 const getClaimsWithPagination = async (where: any, skip: number, limitNum: number, requestingUser?: any) => {
   try {
-    console.log('[GET CLAIMS PAGINATION] Starting query with params:', { skip, limitNum, where: JSON.stringify(where) });
-    
     const [claims, total] = await Promise.all([
       prisma.claim.findMany({
         where,
@@ -169,11 +164,7 @@ const getClaimsWithPagination = async (where: any, skip: number, limitNum: numbe
       prisma.claim.count({ where })
     ]);
 
-    console.log(`[GET CLAIMS PAGINATION] Raw query returned ${claims.length} claims, total: ${total}`);
-    
     const mappedClaims = await mapClaimsWithCreatedBy(claims, requestingUser);
-    console.log(`[GET CLAIMS PAGINATION] Mapped claims completed, returning ${mappedClaims.length} claims`);
-    
     return { claims: mappedClaims, total };
   } catch (error) {
     console.error('❌ [GET CLAIMS PAGINATION ERROR]', error);

@@ -658,12 +658,44 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Pago no encontrado" });
     }
 
-    await prisma.expensePayment.delete({ where: { id: paymentId } });
-    await recalculateExpenseStatus(expenseId);
+    const updatedExpense = await prisma.$transaction(async (tx) => {
+      await tx.expensePayment.delete({ where: { id: paymentId } });
 
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
+      const expWithPayments = await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: { payments: { select: { amount: true } } }
+      });
+
+      const newPaidAmount = expWithPayments!.payments.reduce((sum, p) => sum + p.amount, 0);
+
+      const [pendiente, parcial, pagado, vencido] = await Promise.all([
+        tx.expenseStatus.findUnique({ where: { name: "pendiente" } }),
+        tx.expenseStatus.findUnique({ where: { name: "parcial" } }),
+        tx.expenseStatus.findUnique({ where: { name: "pagado" } }),
+        tx.expenseStatus.findUnique({ where: { name: "vencido" } })
+      ]);
+
+      const now = new Date();
+      let newStatusId: number;
+      if (newPaidAmount >= expWithPayments!.totalAmount) {
+        newStatusId = pagado!.id;
+      } else if (newPaidAmount > 0) {
+        newStatusId = parcial!.id;
+      } else if (expWithPayments!.dueDate < now) {
+        newStatusId = vencido!.id;
+      } else {
+        newStatusId = pendiente!.id;
+      }
+
+      await tx.expense.update({
+        where: { id: expenseId },
+        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+      });
+
+      return tx.expense.findUnique({
+        where: { id: expenseId },
+        include: expenseInclude
+      });
     });
 
     console.log(

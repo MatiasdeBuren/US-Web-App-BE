@@ -293,9 +293,12 @@ export const createExpense = async (req: Request, res: Response) => {
 
     const totalAmount = lineItems.reduce((sum: number, item: any) => sum + item.amount, 0);
 
-    const pendienteStatus = await prisma.expenseStatus.findUnique({ where: { name: "pendiente" } });
-    if (!pendienteStatus) {
-      return res.status(500).json({ message: "No se encontró el estado 'pendiente'. Ejecute el seed." });
+    const [pendienteStatus, vencidoStatus] = await Promise.all([
+      prisma.expenseStatus.findUnique({ where: { name: "pendiente" } }),
+      prisma.expenseStatus.findUnique({ where: { name: "vencido" } })
+    ]);
+    if (!pendienteStatus || !vencidoStatus) {
+      return res.status(500).json({ message: "No se encontraron los estados de expensa. Ejecute el seed." });
     }
 
     const periodDate = new Date(period);
@@ -305,6 +308,8 @@ export const createExpense = async (req: Request, res: Response) => {
     const dueDateObj = new Date(dueDate);
     dueDateObj.setHours(23, 59, 59, 999);
 
+    const initialStatusId = dueDateObj < new Date() ? vencidoStatus.id : pendienteStatus.id;
+
     const expense = await prisma.expense.create({
       data: {
         apartmentId: apartmentId || null,
@@ -313,7 +318,7 @@ export const createExpense = async (req: Request, res: Response) => {
         dueDate:     dueDateObj,
         totalAmount,
         paidAmount:  0,
-        statusId:    pendienteStatus.id,
+        statusId:    initialStatusId,
         adminNotes:  adminNotes || null,
         lineItems: {
           create: lineItems.map((item: any) => ({

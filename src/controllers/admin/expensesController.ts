@@ -459,31 +459,10 @@ export const updateExpense = async (req: Request, res: Response) => {
 
     const updated = await prisma.$transaction(async (tx) => {
       if (lineItems !== undefined) {
-        
         await tx.expenseLineItem.deleteMany({ where: { expenseId } });
 
         const newTotal = lineItems.reduce((sum: number, i: any) => sum + i.amount, 0);
         updateData.totalAmount = newTotal;
-
-        // Recalcular paidAmount para determinar nuevo status
-        const paidAmount = existing.payments.reduce((sum, p) => sum + p.amount, 0);
-        const statuses = await tx.expenseStatus.findMany();
-        const statusMap = Object.fromEntries(statuses.map((s) => [s.name, s.id]));
-
-        const now = new Date();
-        let statusId: number;
-        if (paidAmount >= newTotal) {
-          statusId = statusMap["pagado"];
-        } else if (paidAmount > 0) {
-          statusId = statusMap["parcial"];
-        } else if (existing.dueDate < now) {
-          statusId = statusMap["vencido"];
-        } else {
-          statusId = statusMap["pendiente"];
-        }
-
-        updateData.paidAmount = paidAmount;
-        updateData.statusId   = statusId;
 
         await tx.expenseLineItem.createMany({
           data: lineItems.map((item: any) => ({
@@ -495,6 +474,27 @@ export const updateExpense = async (req: Request, res: Response) => {
           }))
         });
       }
+
+      const effectiveDueDate = updateData.dueDate ?? existing.dueDate;
+      const effectiveTotal   = updateData.totalAmount ?? existing.totalAmount;
+      const paidAmount = existing.payments.reduce((sum, p) => sum + p.amount, 0);
+      const statuses = await tx.expenseStatus.findMany();
+      const statusMap = Object.fromEntries(statuses.map((s) => [s.name, s.id]));
+
+      const now = new Date();
+      let statusId: number;
+      if (paidAmount >= effectiveTotal) {
+        statusId = statusMap["pagado"];
+      } else if (paidAmount > 0) {
+        statusId = statusMap["parcial"];
+      } else if (effectiveDueDate < now) {
+        statusId = statusMap["vencido"];
+      } else {
+        statusId = statusMap["pendiente"];
+      }
+
+      updateData.paidAmount = paidAmount;
+      updateData.statusId   = statusId;
 
       return tx.expense.update({
         where: { id: expenseId },
@@ -569,26 +569,59 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
       }
     }
 
-    const payment = await prisma.expensePayment.create({
-      data: {
-        expenseId,
-        amount,
-        paymentMethodId: paymentMethodId || null,
-        registeredById:  admin.id,
-        paidAt:          paidAt ? new Date(paidAt) : new Date(),
-        notes:           notes || null
-      },
-      include: {
-        paymentMethod: true,
-        registeredBy: { select: { id: true, name: true, email: true } }
+    const { payment, updatedExpense } = await prisma.$transaction(async (tx) => {
+      const newPayment = await tx.expensePayment.create({
+        data: {
+          expenseId,
+          amount,
+          paymentMethodId: paymentMethodId || null,
+          registeredById:  admin.id,
+          paidAt:          paidAt ? new Date(paidAt) : new Date(),
+          notes:           notes || null
+        },
+        include: {
+          paymentMethod: true,
+          registeredBy: { select: { id: true, name: true, email: true } }
+        }
+      });
+
+      const expWithPayments = await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: { payments: { select: { amount: true } } }
+      });
+
+      const newPaidAmount = expWithPayments!.payments.reduce((sum, p) => sum + p.amount, 0);
+
+      const [pendiente, parcial, pagado, vencido] = await Promise.all([
+        tx.expenseStatus.findUnique({ where: { name: "pendiente" } }),
+        tx.expenseStatus.findUnique({ where: { name: "parcial" } }),
+        tx.expenseStatus.findUnique({ where: { name: "pagado" } }),
+        tx.expenseStatus.findUnique({ where: { name: "vencido" } })
+      ]);
+
+      const now = new Date();
+      let newStatusId: number;
+      if (newPaidAmount >= expWithPayments!.totalAmount) {
+        newStatusId = pagado!.id;
+      } else if (newPaidAmount > 0) {
+        newStatusId = parcial!.id;
+      } else if (expWithPayments!.dueDate < now) {
+        newStatusId = vencido!.id;
+      } else {
+        newStatusId = pendiente!.id;
       }
-    });
 
-    await recalculateExpenseStatus(expenseId);
+      await tx.expense.update({
+        where: { id: expenseId },
+        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+      });
 
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
+      const refreshed = await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: expenseInclude
+      });
+
+      return { payment: newPayment, updatedExpense: refreshed };
     });
 
     console.log(

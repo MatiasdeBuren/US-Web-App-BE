@@ -116,9 +116,8 @@ async function updateExpiredReservations() {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   
-  // Update expired reservations and overdue expenses
-  setInterval(updateExpiredReservations, 5 * 60 * 1000);
-  setInterval(syncOverdueExpenses, 5 * 60 * 1000);
-  updateExpiredReservations();
-  syncOverdueExpenses();
+  setInterval(() => updateExpiredReservations().catch(err => console.error('Error in updateExpiredReservations interval:', err)), 5 * 60 * 1000);
+  setInterval(() => syncOverdueExpenses().catch(err => console.error('Error in syncOverdueExpenses interval:', err)), 5 * 60 * 1000);
+  updateExpiredReservations().catch(err => console.error('Error in initial updateExpiredReservations:', err));
+  syncOverdueExpenses().catch(err => console.error('Error in initial syncOverdueExpenses:', err));
 });

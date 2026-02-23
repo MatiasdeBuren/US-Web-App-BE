@@ -41,7 +41,7 @@ export const createApartment = async (req: Request, res: Response) => {
       });
     }
 
-    if (ownerId) {
+    if (ownerId !== undefined && ownerId !== null) {
       if (typeof ownerId !== "number") {
         return res.status(400).json({ 
           message: "El ID del owner debe ser un número" 
@@ -122,7 +122,7 @@ export const createApartment = async (req: Request, res: Response) => {
 export const updateApartment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unit, floor, rooms, areaM2, observations, ownerId, tenantId } = req.body;
+    const { unit, floor, rooms, areaM2, observations, ownerId, tenantIds } = req.body;
     const adminUser = (req as any).user;
 
     console.log(` [ADMIN UPDATE APARTMENT] User ${adminUser.email} updating apartment ${id}:`, req.body);
@@ -251,52 +251,55 @@ export const updateApartment = async (req: Request, res: Response) => {
       }
     }
 
-    if (tenantId !== undefined) {
-      if (tenantId === null) {
-        const currentTenant = existingApartment.tenants[0];
-        if (currentTenant) {
-          updateData.tenants = { disconnect: { id: currentTenant.id } };
-          updatedFields.push("tenant");
-        }
-      } else if (typeof tenantId === "number") {
-        const tenant = await prisma.user.findUnique({
-          where: { id: tenantId },
-          select: { id: true, role: true, apartmentId: true }
-        });
-
-        if (!tenant) {
-          return res.status(404).json({ 
-            message: "Inquilino no encontrado" 
-          });
-        }
-
-        if (tenant.role !== "tenant") {
-          return res.status(400).json({ 
-            message: "El inquilino debe tener el rol de 'tenant'" 
-          });
-        }
-
-        if (tenant.apartmentId && tenant.apartmentId !== apartmentId) {
-          return res.status(400).json({ 
-            message: "El inquilino ya está asignado a otro apartamento" 
-          });
-        }
-
-        const currentTenant = existingApartment.tenants[0];
-        if (currentTenant && currentTenant.id !== tenantId) {
-          updateData.tenants = { 
-            disconnect: { id: currentTenant.id },
-            connect: { id: tenantId }
-          };
-        } else if (!currentTenant) {
-          updateData.tenants = { connect: { id: tenantId } };
-        }
-        updatedFields.push("tenant");
-      } else {
+    if (tenantIds !== undefined) {
+      if (!Array.isArray(tenantIds)) {
         return res.status(400).json({ 
-          message: "El ID del inquilino debe ser un número o null" 
+          message: "tenantIds debe ser un array de números" 
         });
       }
+
+      if (!tenantIds.every((id: any) => typeof id === "number")) {
+        return res.status(400).json({ 
+          message: "Todos los IDs en tenantIds deben ser números" 
+        });
+      }
+
+      if (tenantIds.length > 0) {
+        const tenants = await prisma.user.findMany({
+          where: { id: { in: tenantIds } },
+          select: { id: true, role: true, apartmentId: true, name: true }
+        });
+
+        if (tenants.length !== tenantIds.length) {
+          const foundIds = tenants.map((t) => t.id);
+          const missing = tenantIds.filter((id: number) => !foundIds.includes(id));
+          return res.status(404).json({ 
+            message: "Algunos inquilinos no fueron encontrados",
+            missingIds: missing
+          });
+        }
+
+        const nonTenants = tenants.filter((t) => t.role !== "tenant");
+        if (nonTenants.length > 0) {
+          return res.status(400).json({ 
+            message: "Todos los usuarios deben tener el rol de 'tenant'",
+            invalidUsers: nonTenants.map((t) => ({ id: t.id, name: t.name }))
+          });
+        }
+
+        const assignedElsewhere = tenants.filter(
+          (t) => t.apartmentId !== null && t.apartmentId !== apartmentId
+        );
+        if (assignedElsewhere.length > 0) {
+          return res.status(400).json({ 
+            message: "Algunos inquilinos ya están asignados a otro apartamento",
+            conflictingUsers: assignedElsewhere.map((t) => ({ id: t.id, name: t.name, apartmentId: t.apartmentId }))
+          });
+        }
+      }
+
+      updateData.tenants = { set: tenantIds.map((id: number) => ({ id })) };
+      updatedFields.push("tenants");
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -335,7 +338,7 @@ export const updateApartment = async (req: Request, res: Response) => {
       apartment: {
         ...updatedApartment,
         isOccupied: updatedApartment.tenants.length > 0,
-        tenant: updatedApartment.tenants.length > 0 ? updatedApartment.tenants[0] : null
+        tenants: updatedApartment.tenants
       },
       updatedFields,
       updatedBy: adminUser.email,
@@ -441,7 +444,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error("❌ [ADMIN DELETE APARTMENT ERROR]", error);
+    console.error("[ADMIN DELETE APARTMENT ERROR]", error);
     res.status(500).json({ 
       message: "Error deleting apartment" 
     });

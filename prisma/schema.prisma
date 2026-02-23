@@ -25,7 +25,6 @@ model User {
   userNotifications UserNotification[] @relation("UserNotifications")
   amenityRatings AmenityRating[] @relation("UserRatings")
   gamification UserGamification? @relation("UserGamification")
-  expenses     Expense[]        @relation("UserExpenses")
   registeredPayments ExpensePayment[] @relation("AdminExpensePayments")
   resetPasswordToken    String?       @unique
   resetPasswordExpires  DateTime?
@@ -82,8 +81,8 @@ model Apartment {
   observations String?
   rooms       Int
 
-  ownerId Int
-  owner   User     @relation("OwnedApartments", fields: [ownerId], references: [id])
+  ownerId Int?
+  owner   User?    @relation("OwnedApartments", fields: [ownerId], references: [id])
 
   tenants  User[]   @relation("TenantApartments")
   expenses Expense[] @relation("ApartmentExpenses")
@@ -574,11 +573,8 @@ model PaymentMethod {
 model Expense {
   id Int @id @default(autoincrement())
 
-  // Puede estar asignada a un departamento o directamente a un usuario
-  apartmentId Int?
-  apartment   Apartment? @relation("ApartmentExpenses", fields: [apartmentId], references: [id])
-  userId      Int?
-  user        User?      @relation("UserExpenses", fields: [userId], references: [id])
+  apartmentId Int
+  apartment   Apartment @relation("ApartmentExpenses", fields: [apartmentId], references: [id])
 
   period    DateTime // Primer día del mes de facturación (ej: 2026-02-01)
   dueDate   DateTime // Fecha límite de pago
@@ -597,7 +593,6 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
   @@index([apartmentId])
   @@index([statusId])
   @@index([period])

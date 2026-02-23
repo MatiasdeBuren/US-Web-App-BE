@@ -5,9 +5,6 @@ const expenseInclude = {
   apartment: {
     select: { id: true, unit: true, floor: true }
   },
-  user: {
-    select: { id: true, name: true, email: true }
-  },
   status: true,
   lineItems: {
     include: {
@@ -120,7 +117,6 @@ export const getPaymentMethods = async (_req: Request, res: Response) => {
 export const getExpenses = async (req: Request, res: Response) => {
   try {
     const {
-      userId,
       apartmentId,
       statusId,
       period,
@@ -130,7 +126,6 @@ export const getExpenses = async (req: Request, res: Response) => {
 
     const where: any = {};
 
-    if (userId) where.userId = parseInt(userId as string);
     if (apartmentId) where.apartmentId = parseInt(apartmentId as string);
     if (statusId) where.statusId = parseInt(statusId as string);
 
@@ -201,16 +196,15 @@ export const createExpense = async (req: Request, res: Response) => {
     const admin = (req as any).user;
     const {
       apartmentId,
-      userId,
       period,
       dueDate,
       adminNotes,
       lineItems
     } = req.body;
 
-    if (!apartmentId && !userId) {
+    if (!apartmentId) {
       return res.status(400).json({
-        message: "Debe especificar al menos un apartamento o un usuario"
+        message: "El campo 'apartmentId' es requerido"
       });
     }
 
@@ -229,27 +223,9 @@ export const createExpense = async (req: Request, res: Response) => {
     const validationError = await validateLineItems(lineItems);
     if (validationError) return res.status(400).json({ message: validationError });
 
-    let resolvedUserId: number | null = userId || null;
-
-    if (apartmentId) {
-      const apt = await prisma.apartment.findUnique({
-        where: { id: apartmentId },
-        include: { tenants: { select: { id: true } } }
-      });
-      if (!apt) {
-        return res.status(404).json({ message: `Apartamento ${apartmentId} no encontrado` });
-      }
-      // Only auto-set userId when there is exactly one tenant and the admin didn't send one
-      if (!resolvedUserId && apt.tenants.length === 1) {
-        resolvedUserId = apt.tenants[0].id;
-      }
-    }
-
-    if (userId) {
-      const usr = await prisma.user.findUnique({ where: { id: userId } });
-      if (!usr) {
-        return res.status(404).json({ message: `Usuario ${userId} no encontrado` });
-      }
+    const apt = await prisma.apartment.findUnique({ where: { id: apartmentId } });
+    if (!apt) {
+      return res.status(404).json({ message: `Apartamento ${apartmentId} no encontrado` });
     }
 
     const totalAmount = lineItems.reduce((sum: number, item: any) => sum + item.amount, 0);
@@ -265,8 +241,7 @@ export const createExpense = async (req: Request, res: Response) => {
 
     const expense = await prisma.expense.create({
       data: {
-        apartmentId: apartmentId || null,
-        userId:      resolvedUserId,
+        apartmentId,
         period:      periodDate,
         dueDate:     dueDateObj,
         totalAmount,
@@ -318,7 +293,6 @@ export const updateExpense = async (req: Request, res: Response) => {
 
     const {
       apartmentId,
-      userId,
       period,
       dueDate,
       adminNotes,
@@ -329,6 +303,11 @@ export const updateExpense = async (req: Request, res: Response) => {
       if (!Array.isArray(lineItems) || lineItems.length === 0) {
         return res.status(400).json({ message: "lineItems debe ser un arreglo no vacío" });
       }
+      if (existing.payments.length > 0) {
+        return res.status(400).json({
+          message: "No se puede modificar el importe de una expensa que ya tiene pagos registrados"
+        });
+      }
       const validationError = await validateLineItems(lineItems);
       if (validationError) return res.status(400).json({ message: validationError });
     }
@@ -336,22 +315,16 @@ export const updateExpense = async (req: Request, res: Response) => {
     const updateData: any = {};
 
     if (apartmentId !== undefined) {
-      updateData.apartmentId = apartmentId || null;
-
-      if (userId === undefined && apartmentId) {
-        const apt = await prisma.apartment.findUnique({
-          where: { id: apartmentId },
-          include: { tenants: { select: { id: true } } }
-        });
-        if (apt && apt.tenants.length === 1) {
-          updateData.userId = apt.tenants[0].id;
-        } else if (apt && apt.tenants.length !== 1) {
-          updateData.userId = existing.userId ?? null;
-        }
+      if (!apartmentId) {
+        return res.status(400).json({ message: "El campo 'apartmentId' no puede ser nulo" });
       }
+      const apt = await prisma.apartment.findUnique({ where: { id: apartmentId } });
+      if (!apt) {
+        return res.status(404).json({ message: `Apartamento ${apartmentId} no encontrado` });
+      }
+      updateData.apartmentId = apartmentId;
     }
 
-    if (userId !== undefined) updateData.userId = userId || null;
     if (adminNotes  !== undefined) updateData.adminNotes  = adminNotes  || null;
 
     if (period) {
@@ -366,6 +339,9 @@ export const updateExpense = async (req: Request, res: Response) => {
       d.setHours(23, 59, 59, 999);
       updateData.dueDate = d;
     }
+
+    const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
+    const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
 
     const updated = await prisma.$transaction(async (tx) => {
       if (lineItems !== undefined) {
@@ -388,7 +364,7 @@ export const updateExpense = async (req: Request, res: Response) => {
       const effectiveDueDate = updateData.dueDate ?? existing.dueDate;
       const effectiveTotal   = updateData.totalAmount ?? existing.totalAmount;
       const paidAmount = existing.payments.reduce((sum, p) => sum + p.amount, 0);
-      const statusId = await resolveNewStatus(tx, paidAmount, effectiveTotal, effectiveDueDate);
+      const statusId = await resolveNewStatus(tx, paidAmount, effectiveTotal, effectiveDueDate, statusMap);
 
       updateData.paidAmount = paidAmount;
       updateData.statusId   = statusId;
@@ -469,7 +445,7 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
     const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
     const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
 
-    const payment = await prisma.$transaction(async (tx) => {
+    const { payment, expense: updatedExpense } = await prisma.$transaction(async (tx) => {
       const newPayment = await tx.expensePayment.create({
         data: {
           expenseId,
@@ -499,17 +475,13 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
         statusMap
       );
 
-      await tx.expense.update({
+      const updatedExpense = await tx.expense.update({
         where: { id: expenseId },
-        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+        data: { paidAmount: newPaidAmount, statusId: newStatusId },
+        include: expenseInclude
       });
 
-      return newPayment;
-    });
-
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
+      return { payment: newPayment, expense: updatedExpense };
     });
 
     console.log(
@@ -549,7 +521,7 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
     const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
     const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
 
-    await prisma.$transaction(async (tx) => {
+    const updatedExpense = await prisma.$transaction(async (tx) => {
       await tx.expensePayment.delete({ where: { id: paymentId } });
 
       const expWithPayments = await tx.expense.findUnique({
@@ -566,15 +538,11 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
         statusMap
       );
 
-      await tx.expense.update({
+      return tx.expense.update({
         where: { id: expenseId },
-        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+        data: { paidAmount: newPaidAmount, statusId: newStatusId },
+        include: expenseInclude
       });
-    });
-
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
     });
 
     console.log(

@@ -3,9 +3,9 @@ import { requireAuth } from "../auth_middleware";
 import {
   getUserExpenses,
   getUserExpensesSummary,
-  getUserExpense,
-  getExpenseTypes
+  getUserExpense
 } from "../controllers/expensesController";
+import { getExpenseTypes } from "../controllers/admin/expensesController";
 
 const router = Router();
 

@@ -41,7 +41,7 @@ export const createApartment = async (req: Request, res: Response) => {
       });
     }
 
-    if (ownerId) {
+    if (ownerId !== undefined && ownerId !== null) {
       if (typeof ownerId !== "number") {
         return res.status(400).json({ 
           message: "El ID del owner debe ser un número" 

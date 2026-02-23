@@ -89,8 +89,9 @@ router.get("/expenses/statuses",        validateAdmin, getExpenseStatuses);
 router.get("/expenses/payment-methods", validateAdmin, getPaymentMethods);
 router.get("/expenses",      validateAdmin, getExpenses);
 router.post("/expenses",     validateAdmin, createExpense);
-router.get("/expenses/:id",  validateAdmin, getExpense);
-router.put("/expenses/:id",  validateAdmin, updateExpense);
+router.get("/expenses/:id",   validateAdmin, getExpense);
+router.put("/expenses/:id",   validateAdmin, updateExpense);
+router.patch("/expenses/:id", validateAdmin, updateExpense);
 router.delete("/expenses/:id", validateAdmin, deleteExpense);
 
 router.post("/expenses/:expenseId/payments",              validateAdmin, registerExpensePayment);

@@ -31,15 +31,19 @@ const userExpenseInclude = {
   }
 };
 
-async function expenseWhereForUser(userId: number) {
+async function getApartmentIdsForUser(userId: number): Promise<number[] | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { apartmentId: true }
+    select: {
+      apartmentId: true,
+      ownedApartments: { select: { id: true } }
+    }
   });
   if (!user) return null;
-  const or: any[] = [{ userId }];
-  if (user.apartmentId) or.push({ apartmentId: user.apartmentId });
-  return { or, apartmentId: user.apartmentId };
+  const ids = new Set<number>();
+  if (user.apartmentId) ids.add(user.apartmentId);
+  for (const apt of user.ownedApartments) ids.add(apt.id);
+  return [...ids];
 }
 
 export const getUserExpenses = async (req: Request, res: Response) => {
@@ -47,12 +51,16 @@ export const getUserExpenses = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const ownership = await expenseWhereForUser(userId);
-    if (!ownership) return res.status(404).json({ message: "Usuario no encontrado" });
+    const apartmentIds = await getApartmentIdsForUser(userId);
+    if (!apartmentIds) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    if (apartmentIds.length === 0) {
+      return res.json({ expenses: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } });
+    }
 
     const { statusId, period, page = "1", limit = "20" } = req.query;
 
-    const where: any = { OR: ownership.or };
+    const where: any = { apartmentId: { in: apartmentIds } };
     if (statusId) where.statusId = parseInt(statusId as string);
     if (period && typeof period === "string") {
       const [year, month] = period.split("-").map(Number);
@@ -89,12 +97,16 @@ export const getUserExpensesSummary = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const ownership = await expenseWhereForUser(userId);
-    if (!ownership) return res.status(404).json({ message: "Usuario no encontrado" });
+    const apartmentIds = await getApartmentIdsForUser(userId);
+    if (!apartmentIds) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    if (apartmentIds.length === 0) {
+      return res.json({ totalDebt: 0, overdueDebt: 0, pendingCount: 0, overdueCount: 0, lastPayment: null });
+    }
 
     const unpaidExpenses = await prisma.expense.findMany({
       where: {
-        OR: ownership.or,
+        apartmentId: { in: apartmentIds },
         status: { name: { in: ["pendiente", "parcial", "vencido"] } }
       },
       select: { totalAmount: true, paidAmount: true, status: { select: { name: true } } }
@@ -111,7 +123,7 @@ export const getUserExpensesSummary = async (req: Request, res: Response) => {
     const overdueCount = unpaidExpenses.filter(e => e.status.name === "vencido").length;
 
     const lastPayment = await prisma.expensePayment.findFirst({
-      where: { expense: { OR: ownership.or } },
+      where: { expense: { apartmentId: { in: apartmentIds } } },
       orderBy: { paidAt: "desc" },
       select: {
         id: true,
@@ -144,11 +156,11 @@ export const getUserExpense = async (req: Request, res: Response) => {
     const expenseId = parseInt(req.params.id);
     if (isNaN(expenseId)) return res.status(400).json({ message: "ID inválido" });
 
-    const ownership = await expenseWhereForUser(userId);
-    if (!ownership) return res.status(404).json({ message: "Usuario no encontrado" });
+    const apartmentIds = await getApartmentIdsForUser(userId);
+    if (!apartmentIds) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const expense = await prisma.expense.findFirst({
-      where: { id: expenseId, OR: ownership.or },
+      where: { id: expenseId, apartmentId: { in: apartmentIds } },
       include: userExpenseInclude
     });
 

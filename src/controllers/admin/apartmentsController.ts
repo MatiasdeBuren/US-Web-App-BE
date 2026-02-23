@@ -444,7 +444,7 @@ export const deleteApartment = async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error("❌ [ADMIN DELETE APARTMENT ERROR]", error);
+    console.error("[ADMIN DELETE APARTMENT ERROR]", error);
     res.status(500).json({ 
       message: "Error deleting apartment" 
     });

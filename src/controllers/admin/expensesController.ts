@@ -303,6 +303,11 @@ export const updateExpense = async (req: Request, res: Response) => {
       if (!Array.isArray(lineItems) || lineItems.length === 0) {
         return res.status(400).json({ message: "lineItems debe ser un arreglo no vacío" });
       }
+      if (existing.payments.length > 0) {
+        return res.status(400).json({
+          message: "No se puede modificar el importe de una expensa que ya tiene pagos registrados"
+        });
+      }
       const validationError = await validateLineItems(lineItems);
       if (validationError) return res.status(400).json({ message: validationError });
     }
@@ -335,6 +340,9 @@ export const updateExpense = async (req: Request, res: Response) => {
       updateData.dueDate = d;
     }
 
+    const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
+    const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
+
     const updated = await prisma.$transaction(async (tx) => {
       if (lineItems !== undefined) {
         await tx.expenseLineItem.deleteMany({ where: { expenseId } });
@@ -356,7 +364,7 @@ export const updateExpense = async (req: Request, res: Response) => {
       const effectiveDueDate = updateData.dueDate ?? existing.dueDate;
       const effectiveTotal   = updateData.totalAmount ?? existing.totalAmount;
       const paidAmount = existing.payments.reduce((sum, p) => sum + p.amount, 0);
-      const statusId = await resolveNewStatus(tx, paidAmount, effectiveTotal, effectiveDueDate);
+      const statusId = await resolveNewStatus(tx, paidAmount, effectiveTotal, effectiveDueDate, statusMap);
 
       updateData.paidAmount = paidAmount;
       updateData.statusId   = statusId;

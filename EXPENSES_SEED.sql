@@ -50,11 +50,10 @@ ON CONFLICT (name) DO NOTHING;
 -- Expensa de ejemplo para el apartamento 101 (tenant: maria.gonzalez)
 -- con líneas de detalle para gastos comunes, luz y agua
 INSERT INTO "expenses" (
-  "apartmentId", "userId", period, "dueDate",
+  "apartmentId", period, "dueDate",
   "totalAmount", "paidAmount", "statusId", "adminNotes", "createdAt", "updatedAt"
 ) VALUES (
   (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1),
-  (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com'),
   DATE_TRUNC('month', CURRENT_DATE),               -- primer día del mes actual
   DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '10 days', -- vence el día 10
   47000,
@@ -74,7 +73,7 @@ SELECT
   NULL,
   8000
 FROM "expenses" e
-WHERE e."userId" = (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com')
+WHERE e."apartmentId" = (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1)
 LIMIT 1;
 
 INSERT INTO "expense_line_items" ("expenseId", "typeId", "subtypeId", description, amount)
@@ -85,7 +84,7 @@ SELECT
   NULL,
   12000
 FROM "expenses" e
-WHERE e."userId" = (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com')
+WHERE e."apartmentId" = (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1)
 LIMIT 1;
 
 INSERT INTO "expense_line_items" ("expenseId", "typeId", "subtypeId", description, amount)
@@ -96,7 +95,7 @@ SELECT
   NULL,
   5000
 FROM "expenses" e
-WHERE e."userId" = (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com')
+WHERE e."apartmentId" = (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1)
 LIMIT 1;
 
 INSERT INTO "expense_line_items" ("expenseId", "typeId", "subtypeId", description, amount)
@@ -107,7 +106,7 @@ SELECT
   NULL,
   15000
 FROM "expenses" e
-WHERE e."userId" = (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com')
+WHERE e."apartmentId" = (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1)
 LIMIT 1;
 
 INSERT INTO "expense_line_items" ("expenseId", "typeId", "subtypeId", description, amount)
@@ -118,7 +117,7 @@ SELECT
   NULL,
   7000
 FROM "expenses" e
-WHERE e."userId" = (SELECT id FROM "User" WHERE email = 'maria.gonzalez@gmail.com')
+WHERE e."apartmentId" = (SELECT id FROM "Apartment" WHERE unit = '101' LIMIT 1)
 LIMIT 1;
 
 -- ============================================

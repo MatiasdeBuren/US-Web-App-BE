@@ -1,23 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prismaClient";
 
-export const getExpenseTypes = async (_req: Request, res: Response) => {
-  try {
-    const types = await prisma.expenseType.findMany({
-      include: {
-        subtypes: {
-          orderBy: { label: "asc" }
-        }
-      },
-      orderBy: { label: "asc" }
-    });
-    res.json({ types });
-  } catch (error) {
-    console.error("[USER EXPENSE TYPES]", error);
-    res.status(500).json({ message: "Error al obtener los tipos de expensa" });
-  }
-};
-
 const userExpenseInclude = {
   status: true,
   apartment: { select: { id: true, unit: true, floor: true } },

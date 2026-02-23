@@ -437,7 +437,7 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
     const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
     const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
 
-    const payment = await prisma.$transaction(async (tx) => {
+    const { payment, expense: updatedExpense } = await prisma.$transaction(async (tx) => {
       const newPayment = await tx.expensePayment.create({
         data: {
           expenseId,
@@ -467,17 +467,13 @@ export const registerExpensePayment = async (req: Request, res: Response) => {
         statusMap
       );
 
-      await tx.expense.update({
+      const updatedExpense = await tx.expense.update({
         where: { id: expenseId },
-        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+        data: { paidAmount: newPaidAmount, statusId: newStatusId },
+        include: expenseInclude
       });
 
-      return newPayment;
-    });
-
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
+      return { payment: newPayment, expense: updatedExpense };
     });
 
     console.log(
@@ -517,7 +513,7 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
     const statusRecords = await prisma.expenseStatus.findMany({ select: { id: true, name: true } });
     const statusMap: Record<string, number> = Object.fromEntries(statusRecords.map((s: any) => [s.name, s.id]));
 
-    await prisma.$transaction(async (tx) => {
+    const updatedExpense = await prisma.$transaction(async (tx) => {
       await tx.expensePayment.delete({ where: { id: paymentId } });
 
       const expWithPayments = await tx.expense.findUnique({
@@ -534,15 +530,11 @@ export const deleteExpensePayment = async (req: Request, res: Response) => {
         statusMap
       );
 
-      await tx.expense.update({
+      return tx.expense.update({
         where: { id: expenseId },
-        data: { paidAmount: newPaidAmount, statusId: newStatusId }
+        data: { paidAmount: newPaidAmount, statusId: newStatusId },
+        include: expenseInclude
       });
-    });
-
-    const updatedExpense = await prisma.expense.findUnique({
-      where: { id: expenseId },
-      include: expenseInclude
     });
 
     console.log(
